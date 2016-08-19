@@ -64,10 +64,10 @@ public class Skygram {
         bot.getEventsManager().register(new pro.zackpollard.telegrambot.api.event.Listener() {
             @Override
             public void onCommandMessageReceived(CommandMessageReceivedEvent event) {
-                try {
-                    String command = event.getCommand().toLowerCase();
-                    if (command.equals("login")) {
-                        if (PRIVATE.equals(event.getChat().getType())) {
+                if (PRIVATE.equals(event.getChat().getType())) {
+                    try {
+                        String command = event.getCommand().toLowerCase();
+                        if (command.equals("login")) {
                             String[] args = event.getArgs();
                             if (args.length == 2) {
                                 boolean success;
@@ -84,9 +84,7 @@ public class Skygram {
                                 event.getChat().sendMessage("Correct usage is: /login [username] [password]");
                             }
                         }
-                    }
-                    if (command.equals("logout")) {
-                        if (PRIVATE.equals(event.getChat().getType())) {
+                        if (command.equals("logout")) {
                             User user = new User(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId(), null, null);
                             store.removeUser(user);
                             storeHandler.save(store);
@@ -96,24 +94,29 @@ public class Skygram {
                             event.getChat().sendMessage("Successfully logout from skype.");
                             logger.info("New logouting: " + user.getTgUserId());
                         }
+                    } catch (Exception e) {
+                        logger.log(Level.SEVERE, "OnCommand error", e);
                     }
-                } catch (Exception e) {
-                    logger.log(Level.SEVERE, "OnCommand error", e);
                 }
             }
 
             @Override
             public void onTextMessageReceived(pro.zackpollard.telegrambot.api.event.chat.message.TextMessageReceivedEvent event) {
-                Message repliedTo = event.getMessage().getRepliedTo();
-                if (repliedTo != null) {
-                    com.samczsun.skype4j.chat.Chat chat = messageCache.getChat(repliedTo);
-                    if (chat != null) {
-                        try {
-                            chat.sendMessage(com.samczsun.skype4j.formatting.Message.create().with(Text.plain(event.getContent().getContent())));
-                        } catch (ConnectionException e) {
-                            logger.log(Level.SEVERE, "Can't send message in chat " + chat.getIdentity(), e);
+                if (PRIVATE.equals(event.getChat().getType())) {
+                    Message repliedTo = event.getMessage().getRepliedTo();
+                    if (repliedTo != null) {
+                        com.samczsun.skype4j.chat.Chat chat = messageCache.getChat(repliedTo);
+                        if (chat != null) {
+                            try {
+                                chat.sendMessage(com.samczsun.skype4j.formatting.Message.create().with(Text.plain(event.getContent().getContent())));
+                            } catch (ConnectionException e) {
+                                logger.log(Level.SEVERE, "Can't send message in chat " + chat.getIdentity(), e);
+                            }
+                        } else {
+                            logger.warning("Can't find chat for " + repliedTo.toString());
                         }
                     }
+                    //logger.log(Level.INFO, messageCache.toString());
                 }
             }
         });
