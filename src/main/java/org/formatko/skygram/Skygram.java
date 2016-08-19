@@ -54,7 +54,7 @@ public class Skygram {
     }
 
     public void start() {
-        logger.fine("Starting...");
+        logger.info("Starting...");
         store = storeHandler.load();
 
         bot = TelegramBot.login(botKey);
@@ -78,7 +78,7 @@ public class Skygram {
                                 success = startSkype(user, createSkype(user));
                                 if (success) {
                                     event.getChat().sendMessage("Successfully authorised with skype.");
-                                    logger.fine("New logining: " + args[0]);
+                                    logger.info("New logining: " + args[0]);
                                 }
                             } else {
                                 event.getChat().sendMessage("Correct usage is: /login [username] [password]");
@@ -94,7 +94,7 @@ public class Skygram {
                             skype.logout();
                             userSkypeCache.remove(user);
                             event.getChat().sendMessage("Successfully logout from skype.");
-                            logger.fine("New logouting: " + user.getTgUserId());
+                            logger.info("New logouting: " + user.getTgUserId());
                         }
                     }
                 } catch (Exception e) {
@@ -105,17 +105,16 @@ public class Skygram {
             @Override
             public void onTextMessageReceived(pro.zackpollard.telegrambot.api.event.chat.message.TextMessageReceivedEvent event) {
                 Message repliedTo = event.getMessage().getRepliedTo();
-                com.samczsun.skype4j.chat.Chat chat = messageCache.getChat(repliedTo);
-                if (chat != null) {
-                    try {
-                        chat.sendMessage(com.samczsun.skype4j.formatting.Message.create().with(Text.plain(event.getContent().getContent())));
-                    } catch (ConnectionException e) {
-                        logger.log(Level.SEVERE, "Can't send message in chat " + chat.getIdentity(), e);
+                if (repliedTo != null) {
+                    com.samczsun.skype4j.chat.Chat chat = messageCache.getChat(repliedTo);
+                    if (chat != null) {
+                        try {
+                            chat.sendMessage(com.samczsun.skype4j.formatting.Message.create().with(Text.plain(event.getContent().getContent())));
+                        } catch (ConnectionException e) {
+                            logger.log(Level.SEVERE, "Can't send message in chat " + chat.getIdentity(), e);
+                        }
                     }
-                } else {
-                    logger.warning("Can't find chat for " + repliedTo.toString());
                 }
-                //logger.log(Level.INFO, messageCache.toString());
             }
         });
 
@@ -128,7 +127,7 @@ public class Skygram {
         }
 
         bot.startUpdates(false);
-        logger.fine("Started...");
+        logger.info("Started...");
     }
 
     private Skype createSkype(User user) {
