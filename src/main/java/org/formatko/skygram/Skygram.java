@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static org.formatko.skygram.Main.SKYGRAM_PATH;
 import static pro.zackpollard.telegrambot.api.chat.ChatType.PRIVATE;
 
 /**
@@ -50,7 +51,7 @@ public class Skygram {
 
     public Skygram(String botKey) {
         this.botKey = botKey;
-        this.storeHandler = new FileStoreHandler();
+        this.storeHandler = new FileStoreHandler(SKYGRAM_PATH);
     }
 
     public void start() {

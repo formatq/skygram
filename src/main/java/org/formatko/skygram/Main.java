@@ -1,7 +1,12 @@
 package org.formatko.skygram;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.logging.Level;
+import java.util.logging.LogManager;
 import java.util.logging.Logger;
+
+import static java.io.File.separator;
 
 /**
  * Class of org.formatko.skygram
@@ -10,12 +15,27 @@ import java.util.logging.Logger;
  */
 public class Main {
 
-    public static Logger logger = Logger.getLogger(Thread.currentThread().getStackTrace()[1].getClassName());
+    public static String SKYGRAM_PATH = System.getProperty("user.home") + separator + "AppData" + separator + "Roaming" + separator + "Skygram" + separator;
+
+    private static Logger logger = Logger.getLogger(Thread.currentThread().getStackTrace()[1].getClassName());
 
     private static int attempt = 5;
     private static String botKey;
 
     public static void main(String[] args) {
+        try {
+            File homeDir = new File(SKYGRAM_PATH);
+            if (!homeDir.exists()) {
+                homeDir.mkdirs();
+            }
+            LogManager.getLogManager().readConfiguration(ClassLoader.getSystemResourceAsStream("logging.properties"));
+            worker(args);
+        } catch (IOException e) {
+            logger.severe("Logger problem... " + e.getMessage());
+        }
+    }
+
+    private static void worker(String[] args) {
         if (botKey == null) {
             botKey = args[0];
         }
@@ -34,7 +54,7 @@ public class Main {
                         Thread.sleep(1000);
                     } catch (InterruptedException ignored) {
                     }
-                    main(args);
+                    worker(args);
                 } else {
                     logger.log(Level.SEVERE, "Attempts count is end. Stop the application");
                 }
