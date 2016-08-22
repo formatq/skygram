@@ -9,6 +9,8 @@ import com.samczsun.skype4j.events.chat.message.MessageReceivedEvent;
 import com.samczsun.skype4j.events.chat.user.*;
 import com.samczsun.skype4j.exceptions.ConnectionException;
 import com.samczsun.skype4j.exceptions.InvalidCredentialsException;
+import com.samczsun.skype4j.exceptions.handler.ErrorHandler;
+import com.samczsun.skype4j.exceptions.handler.ErrorSource;
 import com.samczsun.skype4j.formatting.Text;
 import org.formatko.skygram.model.Store;
 import org.formatko.skygram.model.User;
@@ -136,7 +138,12 @@ public class Skygram {
     }
 
     private Skype createSkype(User user) {
-        return new SkypeBuilder(user.getSkLogin(), decrypt(user.getSkPassword())).withLogger(logger).withAllResources().build();
+        return new SkypeBuilder(user.getSkLogin(), decrypt(user.getSkPassword())).withLogger(logger).withAllResources().withExceptionHandler(new ErrorHandler() {
+            @Override
+            public void handle(ErrorSource errorSource, Throwable error, boolean shutdown) {
+                logger.log(Level.SEVERE, "Error on skype. ErrorSource: " + errorSource + ", shutdown: " + shutdown, error);
+            }
+        }).build();
     }
 
     private boolean startSkype(User user, Skype skype) {
