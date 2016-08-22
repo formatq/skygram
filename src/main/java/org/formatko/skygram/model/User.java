@@ -1,15 +1,15 @@
 package org.formatko.skygram.model;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.Set;
 
 /**
  * Model of user
  *
  * @author aivanov
  */
-@AllArgsConstructor
 public class User {
 
     @Setter
@@ -21,6 +21,19 @@ public class User {
     @Setter
     @Getter
     private String skPassword;
+
+    private Set<String> ignoreSkypeChat;
+
+
+    public User(Long tgUserId) {
+        this.tgUserId = tgUserId;
+    }
+
+    public User(Long tgUserId, String skLogin, String skPassword) {
+        this.tgUserId = tgUserId;
+        this.skLogin = skLogin;
+        this.skPassword = skPassword;
+    }
 
     @Override
     public boolean equals(Object o) {

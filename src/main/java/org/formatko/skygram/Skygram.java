@@ -6,6 +6,7 @@ import com.samczsun.skype4j.events.EventHandler;
 import com.samczsun.skype4j.events.Listener;
 import com.samczsun.skype4j.events.chat.call.CallReceivedEvent;
 import com.samczsun.skype4j.events.chat.message.MessageReceivedEvent;
+import com.samczsun.skype4j.events.chat.user.*;
 import com.samczsun.skype4j.exceptions.ConnectionException;
 import com.samczsun.skype4j.exceptions.InvalidCredentialsException;
 import com.samczsun.skype4j.formatting.Text;
@@ -18,8 +19,6 @@ import org.formatko.skygram.util.SkypeUtils;
 import pro.zackpollard.telegrambot.api.TelegramBot;
 import pro.zackpollard.telegrambot.api.chat.Chat;
 import pro.zackpollard.telegrambot.api.chat.message.Message;
-import pro.zackpollard.telegrambot.api.chat.message.send.ParseMode;
-import pro.zackpollard.telegrambot.api.chat.message.send.SendableTextMessage;
 import pro.zackpollard.telegrambot.api.event.chat.message.CommandMessageReceivedEvent;
 
 import java.util.HashMap;
@@ -30,6 +29,8 @@ import java.util.logging.Logger;
 import static org.formatko.skygram.Main.SKYGRAM_PATH;
 import static org.formatko.skygram.model.Cypher.decrypt;
 import static org.formatko.skygram.model.Cypher.encrypt;
+import static org.formatko.skygram.util.SkypeUtils.getStringUsers;
+import static org.formatko.skygram.util.TgUtils.markdown;
 import static pro.zackpollard.telegrambot.api.chat.ChatType.PRIVATE;
 
 /**
@@ -86,7 +87,7 @@ public class Skygram {
                             }
                         }
                         if (command.equals("logout")) {
-                            User user = new User(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId(), null, null);
+                            User user = new User(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId());
                             store.removeUser(user);
                             storeHandler.save(store);
                             Skype skype = userSkypeCache.get(user);
@@ -159,11 +160,9 @@ public class Skygram {
                     String senderName = e.getMessage().getSender().getDisplayName();
                     String textMessage = e.getMessage().getContent().asPlaintext();
                     Message message = bot.sendMessage(getTgChat(),
-                            SendableTextMessage.builder().message(
-                                    (isGroup ? "`" + chatName + "`\n" : "") +
-                                            "*" + senderName + "*: " +
-                                            textMessage)
-                                    .parseMode(ParseMode.MARKDOWN).build());
+                            markdown((isGroup ? "`" + chatName + "`\n" : "") +
+                                    "*" + senderName + "*: " +
+                                    textMessage));
                     messageCache.addMessage(e.getChat(), message);
                 }
 
@@ -173,11 +172,65 @@ public class Skygram {
                     boolean isGroup = SkypeUtils.isGroup(e);
                     String senderName = e.getSender().getDisplayName();
                     Message message = bot.sendMessage(getTgChat(),
-                            SendableTextMessage.builder().message(
-                                    (isGroup ? "`" + chatName + "`\n" : "") +
-                                            "*" + senderName + "* " + (e.isCallStarted() ? "start calling." : "stop calling."))
-                                    .parseMode(ParseMode.MARKDOWN).build());
+                            markdown((isGroup ? "`" + chatName + "`\n" : "") +
+                                    "*" + senderName + "* " + (e.isCallStarted() ? "start calling." : "stop calling."))
+                    );
                     messageCache.addMessage(e.getChat(), message);
+                }
+
+                @EventHandler
+                public void onUserAdd(UserAddEvent e) throws ConnectionException {
+                    addOrRemoveUser(e);
+                }
+
+                @EventHandler
+                public void onUserRemove(UserRemoveEvent e) throws ConnectionException {
+                    addOrRemoveUser(e);
+                }
+
+                @EventHandler
+                public void onLegacyMemberAdded(LegacyMemberAddedEvent e) throws ConnectionException {
+                    logger.log(Level.WARNING, e.getUser().getDisplayName());
+                    //addOrRemoveUser(e);
+                }
+
+                @EventHandler
+                public void onMultiUserAdd(MultiUserAddEvent e) throws ConnectionException {
+                    logger.log(Level.WARNING, e.getAllUsers().toString());
+                    //addOrRemoveUser(e);
+                }
+
+                private void addOrRemoveUser(UserEvent e) throws ConnectionException {
+                    logger.log(Level.INFO, "Started user event " + e.getClass());
+                    Boolean isAdd = null;
+                    String initiator = "Unknown username";
+                    String subjectName = "Some user(s)";
+                    if (e instanceof UserAddEvent) {
+                        initiator = ((UserAddEvent) e).getInitiator().getDisplayName();
+                        isAdd = true;
+                        subjectName = e.getUser().getDisplayName();
+                    }
+                    if (e instanceof MultiUserAddEvent) {
+                        initiator = ((MultiUserAddEvent) e).getInitiator().getDisplayName();
+                        isAdd = true;
+                        subjectName = getStringUsers(((MultiUserAddEvent) e).getAllUsers(), null);
+                    }
+                    if (e instanceof UserRemoveEvent) {
+                        initiator = ((UserRemoveEvent) e).getInitiator().getDisplayName();
+                        isAdd = false;
+                        subjectName = e.getUser().getDisplayName();
+                    }
+                    if (isAdd != null) {
+                        String chatName = SkypeUtils.getChatName(e);
+                        boolean isGroup = SkypeUtils.isGroup(e);
+
+                        Message message = bot.sendMessage(getTgChat(),
+                                markdown((isGroup ? "`" + chatName + "`\n" : "") +
+                                        "*" + initiator + "* " + (isAdd ? "added" : "removed") + " *" + subjectName + "*"));
+                        messageCache.addMessage(e.getChat(), message);
+                    } else {
+                        logger.log(Level.WARNING, "Have not success to handle user add or remove event. Event type is " + e.getClass());
+                    }
                 }
             });
             skype.subscribe();
