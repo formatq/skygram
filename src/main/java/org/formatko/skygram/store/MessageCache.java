@@ -4,10 +4,9 @@ import com.samczsun.skype4j.chat.Chat;
 import pro.zackpollard.telegrambot.api.chat.message.Message;
 
 import java.util.*;
-import java.util.function.Predicate;
 
 /**
- * Class of org.formatko.skygram.store
+ * Custom cache message for replying in tg chat
  *
  * @author aivanov
  */

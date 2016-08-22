@@ -3,7 +3,7 @@ package org.formatko.skygram.store;
 import org.formatko.skygram.model.Store;
 
 /**
- * Class of org.formatko.skygram.store
+ * Interface of store handler
  *
  * @author aivanov
  */

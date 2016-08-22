@@ -7,11 +7,10 @@ import org.formatko.skygram.model.Store;
 import java.io.*;
 import java.util.logging.Logger;
 
-import static java.io.File.separator;
 import static java.util.logging.Level.SEVERE;
 
 /**
- * Class of org.formatko.skygram.store
+ * Implementations for store handler/ Use the file to store data
  *
  * @author aivanov
  */

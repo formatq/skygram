@@ -9,7 +9,8 @@ import java.util.logging.Logger;
 import static java.io.File.separator;
 
 /**
- * Class of org.formatko.skygram
+ * Main class starter
+ * The app have 5 attempts to start if was an error
  *
  * @author aivanov
  */

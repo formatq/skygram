@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Class of org.formatko.skygram.store
+ * Model of user
  *
  * @author aivanov
  */
@@ -30,7 +30,6 @@ public class User {
         User user = (User) o;
 
         return tgUserId.equals(user.tgUserId);
-
     }
 
     @Override

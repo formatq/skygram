@@ -22,17 +22,18 @@ import pro.zackpollard.telegrambot.api.chat.message.send.ParseMode;
 import pro.zackpollard.telegrambot.api.chat.message.send.SendableTextMessage;
 import pro.zackpollard.telegrambot.api.event.chat.message.CommandMessageReceivedEvent;
 
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static org.formatko.skygram.Main.SKYGRAM_PATH;
+import static org.formatko.skygram.model.Cypher.decrypt;
+import static org.formatko.skygram.model.Cypher.encrypt;
 import static pro.zackpollard.telegrambot.api.chat.ChatType.PRIVATE;
 
 /**
- * Class of org.formatko.skygram
+ * Class of skygram. Have the logic of app
  *
  * @author aivanov
  */
@@ -72,8 +73,7 @@ public class Skygram {
                             String[] args = event.getArgs();
                             if (args.length == 2) {
                                 boolean success;
-                                String pass = Base64.getEncoder().encodeToString(args[1].getBytes());
-                                User user = new User(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId(), args[0], pass);
+                                User user = new User(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId(), args[0], encrypt(args[1]));
                                 store.addUser(user);
                                 storeHandler.save(store);
                                 success = startSkype(user, createSkype(user));
@@ -135,7 +135,7 @@ public class Skygram {
     }
 
     private Skype createSkype(User user) {
-        return new SkypeBuilder(user.getSkLogin(), new String(Base64.getDecoder().decode(user.getSkPassword()))).withLogger(logger).withAllResources().build();
+        return new SkypeBuilder(user.getSkLogin(), decrypt(user.getSkPassword())).withLogger(logger).withAllResources().build();
     }
 
     private boolean startSkype(User user, Skype skype) {
@@ -154,6 +154,7 @@ public class Skygram {
                 @EventHandler
                 public void onMessageReceived(MessageReceivedEvent e) throws ConnectionException {
                     String chatName = SkypeUtils.getChatName(e);
+                    logger.info("new message in " + chatName);
                     boolean isGroup = SkypeUtils.isGroup(e);
                     String senderName = e.getMessage().getSender().getDisplayName();
                     String textMessage = e.getMessage().getContent().asPlaintext();
@@ -180,6 +181,7 @@ public class Skygram {
                 }
             });
             skype.subscribe();
+            logger.info("Connected to skype: " + user.getSkLogin());
             return true;
         } catch (InvalidCredentialsException e) {
             logger.log(Level.SEVERE, "Can't log in with " + user, e);

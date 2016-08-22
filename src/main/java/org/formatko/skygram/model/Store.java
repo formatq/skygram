@@ -7,7 +7,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Class of org.formatko.skygram
+ * Model of store
  *
  * @author aivanov
  */
