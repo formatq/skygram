@@ -6,7 +6,7 @@ import pro.zackpollard.telegrambot.api.chat.message.Message;
 import java.util.*;
 
 /**
- * Custom cache message for replying in tg chat
+ * Cus
  *
  * @author aivanov
  */
@@ -15,7 +15,7 @@ public class MessageCache {
     private Map<Chat, Set<Message>> mapForReply;
 
     public MessageCache() {
-        mapForReply = new HashMap<>();
+        mapForReply = Collections.synchronizedMap(new HashMap<>());
     }
 
     public void addMessage(Chat chat, Message message) {

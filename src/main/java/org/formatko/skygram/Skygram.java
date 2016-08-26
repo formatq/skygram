@@ -6,12 +6,16 @@ import com.samczsun.skype4j.events.EventHandler;
 import com.samczsun.skype4j.events.Listener;
 import com.samczsun.skype4j.events.chat.call.CallReceivedEvent;
 import com.samczsun.skype4j.events.chat.message.MessageReceivedEvent;
-import com.samczsun.skype4j.events.chat.user.*;
+import com.samczsun.skype4j.events.chat.participant.LegacyMemberAddedEvent;
+import com.samczsun.skype4j.events.chat.participant.ParticipantAddedEvent;
+import com.samczsun.skype4j.events.chat.participant.ParticipantEvent;
+import com.samczsun.skype4j.events.chat.participant.ParticipantRemovedEvent;
 import com.samczsun.skype4j.exceptions.ConnectionException;
 import com.samczsun.skype4j.exceptions.InvalidCredentialsException;
 import com.samczsun.skype4j.exceptions.handler.ErrorHandler;
 import com.samczsun.skype4j.exceptions.handler.ErrorSource;
 import com.samczsun.skype4j.formatting.Text;
+import com.samczsun.skype4j.participants.Participant;
 import org.formatko.skygram.model.Store;
 import org.formatko.skygram.model.User;
 import org.formatko.skygram.store.FileStoreHandler;
@@ -23,7 +27,9 @@ import pro.zackpollard.telegrambot.api.chat.Chat;
 import pro.zackpollard.telegrambot.api.chat.message.Message;
 import pro.zackpollard.telegrambot.api.event.chat.message.CommandMessageReceivedEvent;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -51,7 +57,7 @@ public class Skygram {
 
     private MessageCache messageCache = new MessageCache();
 
-    private Map<User, Skype> userSkypeCache = new HashMap<>();
+    private Map<User, Skype> userSkypeCache = Collections.synchronizedMap(new HashMap<>());
 
     public Skygram(String botKey) {
         this.botKey = botKey;
@@ -141,13 +147,14 @@ public class Skygram {
         return new SkypeBuilder(user.getSkLogin(), decrypt(user.getSkPassword())).withLogger(logger).withAllResources().withExceptionHandler(new ErrorHandler() {
             @Override
             public void handle(ErrorSource errorSource, Throwable error, boolean shutdown) {
-                logger.log(Level.SEVERE, "Error on skype. ErrorSource: " + errorSource + ", shutdown: " + shutdown, error);
+                logger.log(Level.SEVERE, "Error in '" + user.getSkLogin() + "': " + errorSource, error);
             }
         }).build();
     }
 
     private boolean startSkype(User user, Skype skype) {
         try {
+            logger.info("Connecting to skype: " + user.getSkLogin());
             skype.login();
             skype.getEventDispatcher().registerListener(new Listener() {
                 Chat tgChat = null;
@@ -186,46 +193,38 @@ public class Skygram {
                 }
 
                 @EventHandler
-                public void onUserAdd(UserAddEvent e) throws ConnectionException {
+                public void onUserAdd(ParticipantAddedEvent e) throws ConnectionException {
+                    logger.log(Level.INFO, "skype:" + e.getChat().getClient().getUsername());
                     addOrRemoveUser(e);
                 }
 
                 @EventHandler
-                public void onUserRemove(UserRemoveEvent e) throws ConnectionException {
+                public void onUserRemove(ParticipantRemovedEvent e) throws ConnectionException {
+                    logger.log(Level.INFO, "skype:" + e.getChat().getClient().getUsername());
                     addOrRemoveUser(e);
                 }
 
                 @EventHandler
                 public void onLegacyMemberAdded(LegacyMemberAddedEvent e) throws ConnectionException {
-                    logger.log(Level.WARNING, e.getUser().getDisplayName());
+                    logger.log(Level.WARNING, e.getParticipant().getDisplayName());
                     //addOrRemoveUser(e);
                 }
 
-                @EventHandler
-                public void onMultiUserAdd(MultiUserAddEvent e) throws ConnectionException {
-                    logger.log(Level.WARNING, e.getAllUsers().toString());
-                    //addOrRemoveUser(e);
-                }
-
-                private void addOrRemoveUser(UserEvent e) throws ConnectionException {
-                    logger.log(Level.INFO, "Started user event " + e.getClass());
+                private synchronized void addOrRemoveUser(ParticipantEvent e) throws ConnectionException {
                     Boolean isAdd = null;
                     String initiator = "Unknown username";
                     String subjectName = "Some user(s)";
-                    if (e instanceof UserAddEvent) {
-                        initiator = ((UserAddEvent) e).getInitiator().getDisplayName();
+                    if (e instanceof ParticipantAddedEvent) {
+                        initiator = e.getParticipant().getDisplayName();
                         isAdd = true;
-                        subjectName = e.getUser().getDisplayName();
+                        List<Participant> addedParticipants = ((ParticipantAddedEvent) e).getAddedParticipants();
+                        subjectName = getStringUsers(addedParticipants, null);
                     }
-                    if (e instanceof MultiUserAddEvent) {
-                        initiator = ((MultiUserAddEvent) e).getInitiator().getDisplayName();
-                        isAdd = true;
-                        subjectName = getStringUsers(((MultiUserAddEvent) e).getAllUsers(), null);
-                    }
-                    if (e instanceof UserRemoveEvent) {
-                        initiator = ((UserRemoveEvent) e).getInitiator().getDisplayName();
+                    if (e instanceof ParticipantRemovedEvent) {
+                        initiator = e.getParticipant().getDisplayName();
                         isAdd = false;
-                        subjectName = e.getUser().getDisplayName();
+                        List<Participant> removedParticipants = ((ParticipantRemovedEvent) e).getRemovedParticipants();
+                        subjectName = getStringUsers(removedParticipants, null);
                     }
                     if (isAdd != null) {
                         String chatName = SkypeUtils.getChatName(e);
@@ -241,6 +240,7 @@ public class Skygram {
                 }
             });
             skype.subscribe();
+
             logger.info("Connected to skype: " + user.getSkLogin());
             return true;
         } catch (InvalidCredentialsException e) {

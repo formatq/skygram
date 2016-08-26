@@ -1,15 +1,16 @@
 package org.formatko.skygram.util;
 
-import com.samczsun.skype4j.chat.Chat;
-import com.samczsun.skype4j.chat.GroupChat;
-import com.samczsun.skype4j.chat.IndividualChat;
+import com.samczsun.skype4j.Skype;
+import com.samczsun.skype4j.chat.*;
 import com.samczsun.skype4j.events.chat.ChatEvent;
-import com.samczsun.skype4j.events.chat.user.UserRemoveEvent;
-import com.samczsun.skype4j.exceptions.ChatNotFoundException;
+import com.samczsun.skype4j.events.chat.participant.ParticipantRemovedEvent;
 import com.samczsun.skype4j.exceptions.ConnectionException;
-import com.samczsun.skype4j.user.User;
+import com.samczsun.skype4j.internal.client.FullClient;
+import com.samczsun.skype4j.participants.Participant;
+import com.samczsun.skype4j.participants.info.Contact;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -24,43 +25,39 @@ public class SkypeUtils {
 
     public static String getChatName(ChatEvent chatEvent) throws ConnectionException {
         Chat skypeChat = chatEvent.getChat();
-        String chatName = "Unknown chat";
-        if (isGroup(chatEvent)) {
-            GroupChat group = (GroupChat) skypeChat;
-            chatName = group.getTopic();
-            if (chatName == null || chatName.isEmpty()) {
-                // bug hack for UserRemoveEvent
-                // TODO cant get topic if event is UserRemoveEvent
-                if (chatEvent instanceof UserRemoveEvent) {
+        String chatName = "";
+        switch (SkypeChatType.getType(chatEvent.getChat().getClass().getSimpleName())) {
+            case GROUP:
+                GroupChat group = (GroupChat) skypeChat;
+                chatName = group.getTopic();
+                if (chatName == null || chatName.isEmpty()) {
                     try {
-
-                        Chat chat = group.getClient().getOrLoadChat(group.getIdentity());
-                        if (chat instanceof GroupChat) {
-                            chatName = ((GroupChat) chat).getTopic();
-                            if (chatName != null && !chatName.isEmpty()) {
-                                return chatName;
-                            }
+                        //collect all username in chat
+                        String stringUsers = getStringUsers(group.getAllParticipants(), skypeChat.getSelf().getId());
+                        if (stringUsers.length() > 55) {
+                            stringUsers = stringUsers.substring(0, 52) + "...";
                         }
-                    } catch (Exception e) {
-                        logger.log(Level.WARNING, "Can't get topic for chat " + skypeChat.getIdentity() + ", event " + chatEvent.getClass(), e);
-                    }
-                    chatName = skypeChat.getIdentity();
-                }
-
-                try {
-                    //collect all username in chat
-                    String stringUsers = getStringUsers(group.getAllUsers(), skypeChat.getClient().getUsername());
-                    if (stringUsers.length() > 55) {
-                        stringUsers = stringUsers.substring(0, 52) + "...";
                         return stringUsers;
+                    } catch (ConnectionException e) {
+                        logger.log(Level.SEVERE, "Error get user name", e);
                     }
-                } catch (ConnectionException e) {
-                    logger.log(Level.SEVERE, "Error get user name", e);
+                    return "Unknown chat name";
                 }
-            }
-        } else if (skypeChat instanceof IndividualChat) {
-            chatName = skypeChat.getIdentity().substring(2);
+                break;
+            case INDIVIDUAL:
+                chatName = skypeChat.getIdentity().substring(2);
+                break;
+            case P2P:
+                chatName = "Unknown P2P chat";
+                break;
+            case BOT:
+                BotChat bot = (BotChat) skypeChat;
+                chatName = bot.getBot().getDisplayName();
+                break;
+            case UNKNOWN:
+                break;
         }
+
         return chatName;
     }
 
@@ -69,22 +66,33 @@ public class SkypeUtils {
         return skypeChat instanceof GroupChat;
     }
 
-    public static String getStringUsers(Collection<User> users, String ignoreUsername) throws ConnectionException {
+    public synchronized static String getStringUsers(Collection<Participant> participants, String ignoreUsername) throws ConnectionException {
         String usersString = "";
-        int size = users.size();
-        int i = -1;
-        for (User user : users) {
+        int i = 0;
+        for (Participant participant : participants) {
             i++;
             if (ignoreUsername != null && !ignoreUsername.isEmpty()) {
-                if (user.getUsername().equals(ignoreUsername)) {
+                if (participant.getId().equals(ignoreUsername)) {
+                    //size--;
                     continue;
                 }
             }
-            usersString = usersString + user.getDisplayName();
-            if (i < size - 1) {
-                usersString = usersString + ", ";
+            FullClient client = (FullClient) participant.getClient();
+            client.updateContactList();
+            Contact contact = client.getContact(participant.getId());
+            String displayName = null;
+            if (contact != null) {
+                displayName = contact.getUsername();
+            } else {
+                displayName = getId(participant.getId());
             }
+            usersString += (i == 1 ? displayName : ", " + displayName);
         }
         return usersString;
+    }
+
+    public static String getId(String username) {
+        if (username == null) return null;
+        return username.replace("8:", "");
     }
 }
