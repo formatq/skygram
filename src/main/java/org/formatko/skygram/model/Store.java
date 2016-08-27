@@ -15,18 +15,23 @@ public class Store {
 
     @Setter
     @Getter
-    private Set<User> users = new HashSet<>();
-
-    public void addUser(User user) {
-        users.add(user);
-    }
-
-    public void removeUser(User user) {
-        users.remove(user);
-    }
+    private Long tgChatId;
+    @Setter
+    @Getter
+    private String skLogin;
+    @Setter
+    @Getter
+    private String skPassword;
+    @Setter
+    @Getter
+    private String skChatId;
 
     @Override
     public String toString() {
-        return "Store{" + users + '}';
+        return "Store{" +
+                "tgChatId=" + tgChatId +
+                ", skLogin='" + skLogin + '\'' +
+                ", skChatId=" + skChatId +
+                '}';
     }
 }

@@ -5,6 +5,7 @@ import pro.zackpollard.telegrambot.api.chat.message.send.SendableTextMessage;
 
 import java.util.logging.Logger;
 
+import static pro.zackpollard.telegrambot.api.chat.message.send.ParseMode.HTML;
 import static pro.zackpollard.telegrambot.api.chat.message.send.ParseMode.MARKDOWN;
 
 /**
@@ -18,6 +19,22 @@ public class TgUtils {
 
     public static SendableMessage markdown(String s) {
         return SendableTextMessage.builder().message(s).parseMode(MARKDOWN).build();
+    }
+
+    public static SendableMessage html(String s) {
+        return SendableTextMessage.builder().message(s).parseMode(HTML).build();
+    }
+
+    public static String sanitize(String html) {
+        return html.replaceAll("&apos;", "'").replaceAll("<s raw_pre=\"~\" raw_post=\"~\">", "").replaceAll("</s>", "");
+    }
+
+    public static String pre(String text) {
+        return "<pre>"+text+"</pre>";
+    }
+
+    public static String b(String text) {
+        return "<b>"+text+"</b>";
     }
 
 }

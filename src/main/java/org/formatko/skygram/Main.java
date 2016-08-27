@@ -52,7 +52,7 @@ public class Main {
                 if (attempt >= 0) {
                     logger.log(Level.INFO, "Restarting...");
                     try {
-                        Thread.sleep(1000);
+                        Thread.sleep(10000);
                     } catch (InterruptedException ignored) {
                     }
                     worker(args);

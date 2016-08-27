@@ -6,13 +6,13 @@
 
     <groupId>org.formatko</groupId>
     <artifactId>skygram</artifactId>
-    <version>0.6</version>
+    <version>1.0.1</version>
 
     <dependencies>
         <dependency>
-            <groupId>com.samczsun</groupId>
-            <artifactId>skype4j</artifactId>
-            <version>0.2.0.1-SNAPSHOT</version>
+            <groupId>fr.delthas</groupId>
+            <artifactId>javaskype</artifactId>
+            <version>1.0.14.1-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

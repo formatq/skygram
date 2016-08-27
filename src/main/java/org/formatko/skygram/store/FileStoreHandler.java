@@ -33,7 +33,7 @@ public class FileStoreHandler implements StoreHandler {
     }
 
     @Override
-    public Store load() {
+    public synchronized Store load() {
         file = new File(filePath);
         if (file.exists()) {
             return loadFromFile();
@@ -52,7 +52,7 @@ public class FileStoreHandler implements StoreHandler {
     }
 
     @Override
-    public Boolean save(Store store) {
+    public synchronized Boolean save(Store store) {
         String json = gson.toJson(store);
 
         FileOutputStream outputStream;
