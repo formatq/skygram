@@ -1,16 +1,16 @@
 package org.formatko.skygram;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import fr.delthas.skype.*;
 import fr.delthas.skype.message.Message;
 import fr.delthas.skype.message.TextMessage;
 import org.formatko.skygram.model.Store;
 import org.formatko.skygram.store.FileStoreHandler;
 import org.formatko.skygram.store.StoreHandler;
+import org.formatko.skygram.util.MessageStack;
 import pro.zackpollard.telegrambot.api.TelegramBot;
 import pro.zackpollard.telegrambot.api.chat.Chat;
 import pro.zackpollard.telegrambot.api.event.chat.message.CommandMessageReceivedEvent;
+import pro.zackpollard.telegrambot.api.event.chat.message.MessageEditReceivedEvent;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -33,7 +33,8 @@ public class Skygram {
     private StoreHandler storeHandler;
 
     private Group skChat;
-    private Chat thChat;
+    private Chat tgChat;
+    MessageStack cache = new MessageStack();
 
     public Skygram(String botKey) {
         this.botKey = botKey;
@@ -91,7 +92,18 @@ public class Skygram {
 
             @Override
             public void onTextMessageReceived(pro.zackpollard.telegrambot.api.event.chat.message.TextMessageReceivedEvent event) {
-                skChat.sendMessage(event.getMessage().getSender().getFullName() + ": " + event.getContent().getContent());
+                if (event.getChat().getId().equals(tgChat.getId())) {
+                    String username = b(event.getMessage().getSender().getFullName());
+                    TextMessage textMessage = new TextMessage(null, username + ": " + event.getContent().getContent());
+                    skChat.sendMessage(textMessage);
+                    cache.add(event.getMessage(), textMessage);
+                }
+            }
+
+            @Override
+            public void onMessageEditReceived(MessageEditReceivedEvent event) {
+                Message message = cache.get(event.getMessage());
+
             }
         });
 
@@ -139,7 +151,7 @@ public class Skygram {
                 this.skChat = group;
             }
         }
-        thChat = bot.getChat(store.getTgChatId());
+        tgChat = bot.getChat(store.getTgChatId());
 
         skype.addGroupMessageListener(new GroupMessageListener() {
             @Override
@@ -150,7 +162,7 @@ public class Skygram {
                     switch (message.getType()) {
                         case TEXT:
                             TextMessage text = (TextMessage) message;
-                            messageToTg += (text.isMe() ? " " : ": ") + sanitize(text.getHtml());
+                            messageToTg = messageToTg + ((text.isMe() ? " " : ": ") + sanitize(text.getHtml()));
                             break;
                         case PICTURE:
                             messageToTg += " запостил картинку. \n" + pre("Вот нет чтобы ссылкой скинуть.");
@@ -171,7 +183,8 @@ public class Skygram {
                             messageToTg += " непонятно что прислал. \n" + pre("Надо подробно разобраться");
                             break;
                     }
-                    pro.zackpollard.telegrambot.api.chat.message.Message mes = thChat.sendMessage(html(messageToTg));
+                    pro.zackpollard.telegrambot.api.chat.message.Message mes = tgChat.sendMessage(html(messageToTg));
+                    cache.add(mes, message);
                 }
             }
 
@@ -190,28 +203,40 @@ public class Skygram {
             @Override
             public void usersAdded(Group group, List<User> list) {
                 if (Objects.equals(group.getId(), skChat.getId())) {
-                    thChat.sendMessage("Added : " + list);
+                    List<String> strings = new ArrayList<>();
+                    for (User user : list) {
+                        strings.add(user.getDisplayName());
+                    }
+                    tgChat.sendMessage("Пополнение: " + strings);
                 }
             }
 
             @Override
             public void usersRemoved(Group group, List<User> list) {
                 if (Objects.equals(group.getId(), skChat.getId())) {
-                    thChat.sendMessage("Removed : " + list);
+                    List<String> strings = new ArrayList<>();
+                    for (User user : list) {
+                        strings.add(user.getDisplayName());
+                    }
+                    tgChat.sendMessage("Убавление: " + strings);
                 }
             }
 
             @Override
             public void topicChanged(Group group, String s) {
                 if (Objects.equals(group.getId(), skChat.getId())) {
-                    thChat.sendMessage("Topic rename : " + s);
+                    tgChat.sendMessage("Тему чата поменяли: " + s);
                 }
             }
 
             @Override
             public void usersRolesChanged(Group group, List<Pair<User, Role>> list) {
                 if (Objects.equals(group.getId(), skChat.getId())) {
-                    thChat.sendMessage("User roles : " + list);
+                    List<String> strings = new ArrayList<>();
+                    for (Pair<User, Role> pair : list) {
+                        strings.add(pair.getFirst().getDisplayName() + " теперь " + (pair.getSecond() == Role.ADMIN ? "админ" : "обычный пользователь"));
+                    }
+                    tgChat.sendMessage("Обновили ролей пользователей: " + strings);
                 }
             }
         });

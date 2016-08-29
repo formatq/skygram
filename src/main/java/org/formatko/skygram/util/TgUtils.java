@@ -30,11 +30,11 @@ public class TgUtils {
     }
 
     public static String pre(String text) {
-        return "<pre>"+text+"</pre>";
+        return "<pre raw_pre=\"{code}\" raw_post=\"{code}\">" + text + "</pre>";
     }
 
     public static String b(String text) {
-        return "<b>"+text+"</b>";
+        return "<b raw_pre=\"*\" raw_post=\"*\">" + text + "</b>";
     }
 
 }

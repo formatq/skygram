@@ -11,10 +11,15 @@ import java.util.LinkedHashMap;
  */
 public class MessageStack {
 
-    private LinkedHashMap<Message, fr.delthas.skype.message.Message> telegramToSkype;
+    private LinkedHashMap<Message, fr.delthas.skype.message.Message> telegramToSkype = new LinkedHashMap<>();
 
-    public synchronized void add(Message tg, fr.delthas.skype.message.Message sk){
+    public synchronized void add(Message tg, fr.delthas.skype.message.Message sk) {
+        long messageId = tg.getMessageId();
+        telegramToSkype.put(tg, sk);
+    }
 
+    public synchronized fr.delthas.skype.message.Message get(Message tg) {
+        return telegramToSkype.get(tg);
     }
 
 }
