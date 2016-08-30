@@ -19,7 +19,7 @@ public class MessageCache {
 //
 //    public void addMessage(Chat chat, Message message) {
 //        if (mapForReply.containsKey(chat)) {
-//            Set<Message> messages = mapForReply.get(chat);
+//            Set<Message> messages = mapForReply.findSkypeMessage(chat);
 //            messages.add(message);
 //        } else {
 //            HashSet<Message> objects = new HashSet<>();

@@ -9,8 +9,10 @@ import org.formatko.skygram.store.StoreHandler;
 import org.formatko.skygram.util.MessageStack;
 import pro.zackpollard.telegrambot.api.TelegramBot;
 import pro.zackpollard.telegrambot.api.chat.Chat;
+import pro.zackpollard.telegrambot.api.chat.message.send.ParseMode;
 import pro.zackpollard.telegrambot.api.event.chat.message.CommandMessageReceivedEvent;
 import pro.zackpollard.telegrambot.api.event.chat.message.MessageEditReceivedEvent;
+import pro.zackpollard.telegrambot.api.event.chat.message.MessageReceivedEvent;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -78,7 +80,7 @@ public class Skygram {
 //                            ChatLink chatLink = new ChatLink(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId());
 //                            store.removeUser(chatLink);
 //                            storeHandler.save(store);
-//                            Skype skype = userSkypeCache.get(chatLink);
+//                            Skype skype = userSkypeCache.findSkypeMessage(chatLink);
 //                            skype.logout();
 //                            userSkypeCache.remove(chatLink);
 //                            event.getChat().sendMessage("Successfully logout from skype.");
@@ -101,8 +103,13 @@ public class Skygram {
             }
 
             @Override
+            public void onMessageReceived(MessageReceivedEvent event) {
+                logger.info(event.getMessage().asJson().toString());
+            }
+
+            @Override
             public void onMessageEditReceived(MessageEditReceivedEvent event) {
-                Message message = cache.get(event.getMessage());
+                Message message = cache.findSkypeMessage(event.getMessage());
 
             }
         });
@@ -156,45 +163,101 @@ public class Skygram {
         skype.addGroupMessageListener(new GroupMessageListener() {
             @Override
             public void messageReceived(Group group, User sender, Message message) {
-                logger.info("" + message);
-                if (Objects.equals(group.getId(), skChat.getId())) {
-                    String messageToTg = b(sender.getDisplayName());
-                    switch (message.getType()) {
-                        case TEXT:
-                            TextMessage text = (TextMessage) message;
-                            messageToTg = messageToTg + ((text.isMe() ? " " : ": ") + sanitize(text.getHtml()));
-                            break;
-                        case PICTURE:
-                            messageToTg += " запостил картинку. \n" + pre("Вот нет чтобы ссылкой скинуть.");
-                            break;
-                        case FILE:
-                            messageToTg += " запостил файл. \n" + pre("Использует файлообменник на всю катушку.");
-                            break;
-                        case VIDEO:
-                            messageToTg += " прислал видеообращение. \n" + pre("Молодец, но мог бы просто текстом..");
-                            break;
-                        case CONTACT:
-                            messageToTg += " поделился данными контакта. \n" + pre("Молодец.");
-                            break;
-                        case MOJI:
-                            messageToTg += " прислал Можи. Какой мовитон...\n" + pre("Это такие стикеры в скайпе");
-                            break;
-                        case UNKNOWN:
-                            messageToTg += " непонятно что прислал. \n" + pre("Надо подробно разобраться");
-                            break;
+                try {
+                    logger.info("" + message);
+                    if (Objects.equals(group.getId(), skChat.getId())) {
+                        String messageToTg = "";
+                        String senderName = b(sender.getDisplayName());
+                        switch (message.getType()) {
+                            case TEXT:
+                                TextMessage text = (TextMessage) message;
+                                if (text.getQuote() != null) {
+                                    String textToQuote = sanitize(text.getHtml());
+                                    messageToTg = senderName + i(" цитирует:") + "\n" + pre(text.getQuote()) + (textToQuote.isEmpty() ? "" : "\n" + textToQuote);
+                                } else {
+                                    messageToTg = senderName + (text.isMe() ? "" : ": ") + sanitize(text.getHtml());
+                                }
+                                break;
+                            case PICTURE:
+                                messageToTg = senderName + i(" запостил картинку. \n") + pre("Вот нет чтобы ссылкой скинуть.");
+                                break;
+                            case FILE:
+                                messageToTg = senderName + i(" запостил файл. \n") + pre("Использует файлообменник на всю катушку.");
+                                break;
+                            case VIDEO:
+                                messageToTg = senderName + i(" прислал видеообращение. \n") + pre("Молодец, но мог бы просто текстом..");
+                                break;
+                            case CONTACT:
+                                messageToTg = senderName + i(" поделился данными контакта. \n") + pre("Молодец.");
+                                break;
+                            case MOJI:
+                                messageToTg = senderName + i(" прислал Можи. Какой мовитон...\n") + pre("Это такие стикеры в скайпе");
+                                break;
+                            case UNKNOWN:
+                                messageToTg = senderName + i(" непонятно что прислал. \n") + pre("Надо подробно разобраться");
+                                break;
+                        }
+                        pro.zackpollard.telegrambot.api.chat.message.Message mes = tgChat.sendMessage(html(messageToTg));
+                        cache.add(mes, message);
                     }
-                    pro.zackpollard.telegrambot.api.chat.message.Message mes = tgChat.sendMessage(html(messageToTg));
-                    cache.add(mes, message);
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Error: ", e);
                 }
             }
 
             @Override
             public void messageEdited(Group group, User sender, Message message) {
+                try {
+                    logger.info("" + message);
+                    if (Objects.equals(group.getId(), skChat.getId())) {
+                        pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = cache.findTgMessage(message);
+                        if (tgMessage != null) {
+                            String messageToTg = "";
+                            String senderName = b(sender.getDisplayName());
+                            switch (message.getType()) {
+                                case TEXT:
+                                    TextMessage text = (TextMessage) message;
+                                    if (text.getQuote() != null) {
+                                        String textToQuote = sanitize(text.getHtml());
+                                        messageToTg = senderName + i(" цитирует:") + "\n" + pre(text.getQuote()) + (textToQuote.isEmpty() ? "" : "\n" + textToQuote);
+                                    } else {
+                                        messageToTg = senderName + (text.isMe() ? "" : ": ") + sanitize(text.getHtml());
+                                    }
 
+                                    pro.zackpollard.telegrambot.api.chat.message.Message editMessage = tgChat.getBotInstance().editMessageText(tgChat.getId(), tgMessage.getMessageId(), messageToTg, ParseMode.HTML, false, null);
+                                    cache.add(editMessage, message);
+                                    break;
+                                case PICTURE:
+                                case FILE:
+                                case VIDEO:
+                                case CONTACT:
+                                case MOJI:
+                                case UNKNOWN:
+                                    break;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Error: ", e);
+                }
             }
 
             @Override
             public void messageRemoved(Group group, User sender, Message message) {
+                try {
+                    logger.info("" + message);
+                    if (Objects.equals(group.getId(), skChat.getId())) {
+                        pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = cache.findTgMessage(message);
+                        if (tgMessage != null) {
+                            String messageToTg = b(sender.getDisplayName());
+                            messageToTg = messageToTg + i(" удалил сообщение");
+                            tgChat.getBotInstance().editMessageText(tgChat.getId(), tgMessage.getMessageId(), messageToTg, ParseMode.HTML, false, null);
+                            cache.remove(tgMessage);
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Error: ", e);
+                }
             }
         });
 

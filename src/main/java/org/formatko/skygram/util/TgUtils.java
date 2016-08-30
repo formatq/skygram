@@ -37,4 +37,8 @@ public class TgUtils {
         return "<b raw_pre=\"*\" raw_post=\"*\">" + text + "</b>";
     }
 
+    public static String i(String text) {
+        return "<i raw_pre=\"_\" raw_post=\"_\">" + text + "</i>";
+    }
+
 }
