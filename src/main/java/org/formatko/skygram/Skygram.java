@@ -3,10 +3,12 @@ package org.formatko.skygram;
 import fr.delthas.skype.*;
 import fr.delthas.skype.message.Message;
 import fr.delthas.skype.message.TextMessage;
+import net.sf.saxon.s9api.Processor;
 import org.formatko.skygram.model.Store;
 import org.formatko.skygram.store.FileStoreHandler;
 import org.formatko.skygram.store.StoreHandler;
 import org.formatko.skygram.util.MessageStack;
+import org.formatko.skygram.util.XmlHelper;
 import pro.zackpollard.telegrambot.api.TelegramBot;
 import pro.zackpollard.telegrambot.api.chat.Chat;
 import pro.zackpollard.telegrambot.api.chat.message.send.ParseMode;
@@ -171,9 +173,10 @@ public class Skygram {
                         switch (message.getType()) {
                             case TEXT:
                                 TextMessage text = (TextMessage) message;
-                                if (text.getQuote() != null) {
-                                    String textToQuote = sanitize(text.getHtml());
-                                    messageToTg = senderName + i(" цитирует:") + "\n" + pre(text.getQuote()) + (textToQuote.isEmpty() ? "" : "\n" + textToQuote);
+                                if (text.hasQuotes()) {
+                                    String textToQuote = prepareQuotes(text.getHtml());
+                                    messageToTg = senderName + ":\n" + textToQuote;
+                                    logger.info(messageToTg);
                                 } else {
                                     messageToTg = senderName + (text.isMe() ? "" : ": ") + sanitize(text.getHtml());
                                 }
@@ -217,13 +220,13 @@ public class Skygram {
                             switch (message.getType()) {
                                 case TEXT:
                                     TextMessage text = (TextMessage) message;
-                                    if (text.getQuote() != null) {
-                                        String textToQuote = sanitize(text.getHtml());
-                                        messageToTg = senderName + i(" цитирует:") + "\n" + pre(text.getQuote()) + (textToQuote.isEmpty() ? "" : "\n" + textToQuote);
+                                    if (text.hasQuotes()) {
+                                        String textToQuote = prepareQuotes(text.getHtml());
+                                        messageToTg = senderName + ":\n" + textToQuote;
+                                        logger.info(messageToTg);
                                     } else {
                                         messageToTg = senderName + (text.isMe() ? "" : ": ") + sanitize(text.getHtml());
                                     }
-
                                     pro.zackpollard.telegrambot.api.chat.message.Message editMessage = tgChat.getBotInstance().editMessageText(tgChat.getId(), tgMessage.getMessageId(), messageToTg, ParseMode.HTML, false, null);
                                     cache.add(editMessage, message);
                                     break;
