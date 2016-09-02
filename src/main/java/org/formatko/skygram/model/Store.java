@@ -30,6 +30,10 @@ public class Store {
     @Setter
     @Getter
     private boolean matchWordsEnabled;
+    @Setter
+    @Getter
+    private String greetings;
+
 
     @Override
     public String toString() {

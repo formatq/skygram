@@ -53,4 +53,12 @@ public class TgUtils {
         return null;
     }
 
+    public static String arrayToString(String s, String sep) {
+        String result = s.replace("[", "").replaceAll("]", "");
+        if (sep != null) {
+            result.replaceAll(", ", sep);
+        }
+        return result;
+    }
+
 }

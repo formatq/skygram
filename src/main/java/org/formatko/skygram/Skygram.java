@@ -21,6 +21,7 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 import static org.formatko.skygram.util.TgUtils.*;
+import static org.formatko.skygram.util.TgUtils.arrayToString;
 import static pro.zackpollard.telegrambot.api.chat.ChatType.PRIVATE;
 
 /**
@@ -347,11 +348,19 @@ public class Skygram {
             @Override
             public void usersAdded(Group group, List<User> list) {
                 if (Objects.equals(group.getId(), skChat.getId())) {
-                    List<String> strings = new ArrayList<>();
+                    List<String> nameStrings = new ArrayList<>();
                     for (User user : list) {
-                        strings.add(user.getDisplayName());
+                        nameStrings.add(user.getDisplayName());
                     }
-                    tgChat.sendMessage("Пополнение: " + strings);
+                    String names = arrayToString(nameStrings.toString(), null);
+
+                    tgChat.sendMessage("Пополнение: " + names);
+                    String greetings = store.getGreetings();
+                    if (greetings != null && !greetings.isEmpty()) {
+                        String words = arrayToString(Arrays.toString(store.getMatchWords()), " ");
+                        String s = greetings.replace("{newMembers}", names).replace("{filters}", (pattern != null ? words : "Например пицц"));
+                        skChat.sendMessage(new TextMessage(null, s));
+                    }
                 }
             }
 
@@ -362,14 +371,14 @@ public class Skygram {
                     for (User user : list) {
                         strings.add(user.getDisplayName());
                     }
-                    tgChat.sendMessage("Убавление: " + strings);
+                    tgChat.sendMessage("Убавление: " + arrayToString(strings.toString(), null));
                 }
             }
 
             @Override
             public void topicChanged(Group group, String s) {
                 if (Objects.equals(group.getId(), skChat.getId())) {
-                    tgChat.sendMessage("Тему чата поменяли: " + s);
+                    tgChat.sendMessage("Тему чата в скайпе поменяли: " + s);
                 }
             }
 
