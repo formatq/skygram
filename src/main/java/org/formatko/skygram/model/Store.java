@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Model of store
@@ -33,7 +35,9 @@ public class Store {
     @Setter
     @Getter
     private String greetings;
-
+    @Setter
+    @Getter
+    private BirthdayStore birthdays;
 
     @Override
     public String toString() {
@@ -44,5 +48,15 @@ public class Store {
                 ", matchWordsEnabled=" + matchWordsEnabled +
                 ", matchWords=" + Arrays.toString(matchWords) +
                 '}';
+    }
+
+
+    public class BirthdayStore {
+        @Setter
+        @Getter
+        Map<String, String> dates = new HashMap<>();
+        @Setter
+        @Getter
+        String[] templates;
     }
 }

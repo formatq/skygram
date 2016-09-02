@@ -15,6 +15,8 @@ import pro.zackpollard.telegrambot.api.event.chat.ParticipantJoinGroupChatEvent;
 import pro.zackpollard.telegrambot.api.event.chat.ParticipantLeaveGroupChatEvent;
 import pro.zackpollard.telegrambot.api.event.chat.message.*;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,6 +35,8 @@ public class Skygram {
 
     public static Logger logger = Logger.getLogger(Thread.currentThread().getStackTrace()[1].getClassName());
 
+    private static SimpleDateFormat sdf = new SimpleDateFormat("dd-MM HH:mm");
+
     private String botKey;
     private String botUserName;
     private StoreHandler storeHandler;
@@ -43,6 +47,7 @@ public class Skygram {
     private Pattern pattern;
 
     MessageStack cache = new MessageStack();
+    Timer timer = new Timer("birthdaysTimer", false);
 
     public Skygram(String botKey, String storePath) {
         this.botKey = botKey;
@@ -70,7 +75,44 @@ public class Skygram {
                 pattern = Pattern.compile(patterString, Pattern.DOTALL);
             }
         }
+        if (store.getBirthdays() != null) {
+//            "birthdays": {
+//                "dates": {
+//                    "Дататех-Бот": "02-09 18:1-",
+//                            "Дататех-Бот2": "02-09 18:2-"
+//                },
+//                "templates": [
+//                "Коллеги! Давайте поздравим {user} с днем рождения! Пожелаем всех благ! (clap)"
+//    ]
+//            },
+            Map<String, String> dates = store.getBirthdays().getDates();
+            String[] templates = store.getBirthdays().getTemplates();
+            if (!dates.isEmpty() && templates.length > 0) {
+                timer.schedule(new TimerTask() {
+                    Random rand = new Random(System.currentTimeMillis());
 
+                    @Override
+                    public void run() {
+                        for (Map.Entry<String, String> entry : dates.entrySet()) {
+                            String name = entry.getKey();
+                            String date = entry.getValue();
+                            String now = sdf.format(new Date());
+                            String format = now.substring(0, now.length() - 1) + "-";
+                            if (format.equals(date)) {
+                                String s = templates[rand.nextInt(templates.length)].replaceAll("\\{user\\}", name);
+                                TextMessage textMessage = new TextMessage(null, s);
+                                if (skChat != null) {
+                                    skChat.sendMessage(textMessage);
+                                }
+                                if (tgChat != null) {
+                                    tgChat.sendMessage(s);
+                                }
+                            }
+                        }
+                    }
+                }, 3000, 3000);
+            }
+        }
 
         TelegramBot bot = TelegramBot.login(botKey);
         botUserName = "@" + bot.getBotUsername();
