@@ -3,12 +3,10 @@ package org.formatko.skygram;
 import fr.delthas.skype.*;
 import fr.delthas.skype.message.Message;
 import fr.delthas.skype.message.TextMessage;
-import net.sf.saxon.s9api.Processor;
 import org.formatko.skygram.model.Store;
 import org.formatko.skygram.store.FileStoreHandler;
 import org.formatko.skygram.store.StoreHandler;
 import org.formatko.skygram.util.MessageStack;
-import org.formatko.skygram.util.XmlHelper;
 import pro.zackpollard.telegrambot.api.TelegramBot;
 import pro.zackpollard.telegrambot.api.chat.Chat;
 import pro.zackpollard.telegrambot.api.chat.message.send.ParseMode;
@@ -20,7 +18,6 @@ import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static org.formatko.skygram.Main.SKYGRAM_PATH;
 import static org.formatko.skygram.util.TgUtils.*;
 import static pro.zackpollard.telegrambot.api.chat.ChatType.PRIVATE;
 
@@ -40,9 +37,9 @@ public class Skygram {
     private Chat tgChat;
     MessageStack cache = new MessageStack();
 
-    public Skygram(String botKey) {
+    public Skygram(String botKey, String storePath) {
         this.botKey = botKey;
-        this.storeHandler = new FileStoreHandler(SKYGRAM_PATH);
+        this.storeHandler = new FileStoreHandler(storePath);
     }
 
     public void start() throws Exception {
@@ -125,6 +122,7 @@ public class Skygram {
 
             @Override
             public void messageReceived(User sender, Message message) {
+                logger.info("from '" + sender.getDisplayName() + "': " + message);
                 switch (message.getType()) {
                     case TEXT:
                         break;
@@ -146,11 +144,12 @@ public class Skygram {
 
             @Override
             public void messageEdited(User sender, Message message) {
-
+                logger.info("from '" + sender.getDisplayName() + "': " + message);
             }
 
             @Override
             public void messageRemoved(User sender, Message message) {
+                logger.info("from '" + sender.getDisplayName() + "': " + message);
                 sender.sendMessage("Чоит ты там удаляешь? :)");
             }
         });
@@ -166,7 +165,7 @@ public class Skygram {
             @Override
             public void messageReceived(Group group, User sender, Message message) {
                 try {
-                    logger.info("" + message);
+                    logger.info("g '" + group.getTopic() + "' from " + sender.getDisplayName() + ": " + message);
                     if (Objects.equals(group.getId(), skChat.getId())) {
                         String messageToTg = "";
                         String senderName = b(sender.getDisplayName());
@@ -211,7 +210,7 @@ public class Skygram {
             @Override
             public void messageEdited(Group group, User sender, Message message) {
                 try {
-                    logger.info("" + message);
+                    logger.info("g '" + group.getTopic() + "' from " + sender.getDisplayName() + ": " + message);
                     if (Objects.equals(group.getId(), skChat.getId())) {
                         pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = cache.findTgMessage(message);
                         if (tgMessage != null) {
@@ -248,7 +247,7 @@ public class Skygram {
             @Override
             public void messageRemoved(Group group, User sender, Message message) {
                 try {
-                    logger.info("" + message);
+                    logger.info("g '" + group.getTopic() + "' from " + sender.getDisplayName() + ": " + message);
                     if (Objects.equals(group.getId(), skChat.getId())) {
                         pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = cache.findTgMessage(message);
                         if (tgMessage != null) {

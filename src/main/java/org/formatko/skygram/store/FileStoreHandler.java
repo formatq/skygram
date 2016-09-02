@@ -28,7 +28,8 @@ public class FileStoreHandler implements StoreHandler {
     }
 
     public FileStoreHandler(String filePath) {
-        this.filePath = filePath + FILENAME;
+        this.filePath = filePath;
+        logger.info("Path to store=" + this.filePath );
         gson = new GsonBuilder().setPrettyPrinting().create();
     }
 
@@ -36,6 +37,7 @@ public class FileStoreHandler implements StoreHandler {
     public synchronized Store load() {
         file = new File(filePath);
         if (file.exists()) {
+            logger.info("Store file exist");
             return loadFromFile();
         } else {
             try {
