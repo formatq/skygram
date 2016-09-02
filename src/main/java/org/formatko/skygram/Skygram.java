@@ -1,6 +1,7 @@
 package org.formatko.skygram;
 
 import fr.delthas.skype.*;
+import fr.delthas.skype.message.AbstractMessage;
 import fr.delthas.skype.message.Message;
 import fr.delthas.skype.message.TextMessage;
 import org.formatko.skygram.model.Store;
@@ -10,13 +11,14 @@ import org.formatko.skygram.util.MessageStack;
 import pro.zackpollard.telegrambot.api.TelegramBot;
 import pro.zackpollard.telegrambot.api.chat.Chat;
 import pro.zackpollard.telegrambot.api.chat.message.send.ParseMode;
-import pro.zackpollard.telegrambot.api.event.chat.message.CommandMessageReceivedEvent;
-import pro.zackpollard.telegrambot.api.event.chat.message.MessageEditReceivedEvent;
-import pro.zackpollard.telegrambot.api.event.chat.message.MessageReceivedEvent;
+import pro.zackpollard.telegrambot.api.event.chat.ParticipantJoinGroupChatEvent;
+import pro.zackpollard.telegrambot.api.event.chat.ParticipantLeaveGroupChatEvent;
+import pro.zackpollard.telegrambot.api.event.chat.message.*;
 
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 import static org.formatko.skygram.util.TgUtils.*;
 import static pro.zackpollard.telegrambot.api.chat.ChatType.PRIVATE;
@@ -31,10 +33,14 @@ public class Skygram {
     public static Logger logger = Logger.getLogger(Thread.currentThread().getStackTrace()[1].getClassName());
 
     private String botKey;
+    private String botUserName;
     private StoreHandler storeHandler;
 
     private Group skChat;
     private Chat tgChat;
+
+    private Pattern pattern;
+
     MessageStack cache = new MessageStack();
 
     public Skygram(String botKey, String storePath) {
@@ -42,17 +48,38 @@ public class Skygram {
         this.storeHandler = new FileStoreHandler(storePath);
     }
 
+    public Boolean isMatch(String html) {
+        return pattern != null && pattern.matcher(html.toLowerCase()).matches();
+    }
+
     public void start() throws Exception {
         logger.info("Starting...");
         Store store = storeHandler.load();
 
+        if (store.isMatchWordsEnabled()) {
+            String patterString = "";
+            String[] words = store.getMatchWords();
+            for (int i = 0; i < words.length; i++) {
+                patterString += ".*" + words[i].toLowerCase() + ".*";
+                if (i != words.length - 1) {
+                    patterString += "|";
+                }
+            }
+            if (!patterString.isEmpty()) {
+                pattern = Pattern.compile(patterString, Pattern.DOTALL);
+            }
+        }
+
+
         TelegramBot bot = TelegramBot.login(botKey);
+        botUserName = "@" + bot.getBotUsername();
 
         Skype skype = new Skype(store.getSkLogin(), store.getSkPassword());
 
         if (bot == null) {
             throw new RuntimeException("Can't create Telegram bot. Check key of bot.");
         }
+
         bot.getEventsManager().register(new pro.zackpollard.telegrambot.api.event.Listener() {
             @Override
             public void onCommandMessageReceived(CommandMessageReceivedEvent event) {
@@ -94,10 +121,17 @@ public class Skygram {
             @Override
             public void onTextMessageReceived(pro.zackpollard.telegrambot.api.event.chat.message.TextMessageReceivedEvent event) {
                 if (event.getChat().getId().equals(tgChat.getId())) {
-                    String username = b(event.getMessage().getSender().getFullName());
-                    TextMessage textMessage = new TextMessage(null, username + ": " + event.getContent().getContent());
-                    skChat.sendMessage(textMessage);
-                    cache.add(event.getMessage(), textMessage);
+                    String content = event.getContent().getContent();
+                    pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = event.getMessage();
+                    if (isReplyToBot(tgMessage) || content.startsWith(botUserName)) {
+                        if (content.startsWith(botUserName)) {
+                            content = content.replace(botUserName, "");
+                        }
+                        String username = b(tgMessage.getSender().getFullName());
+                        TextMessage textMessage = new TextMessage(null, username + ": " + content);
+                        skChat.sendMessage(textMessage);
+                        cache.add(event.getMessage(), textMessage);
+                    }
                 }
             }
 
@@ -108,8 +142,51 @@ public class Skygram {
 
             @Override
             public void onMessageEditReceived(MessageEditReceivedEvent event) {
-                Message message = cache.findSkypeMessage(event.getMessage());
+                logger.info(event.getMessage().asJson().toString());
+            }
 
+            @Override
+            public void onPhotoMessageReceived(PhotoMessageReceivedEvent event) {
+                logger.info(event.getMessage().asJson().toString());
+                pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = event.getMessage();
+                if (isReplyToBot(tgMessage)) {
+                    String username = b(tgMessage.getSender().getFullName());
+                    String caption = event.getContent().getCaption();
+                    TextMessage textMessage = new TextMessage(null, username + i(" отправил фотку") + (caption != null ? (" c подписью '" + caption + "'") : ""));
+                    skChat.sendMessage(textMessage);
+                    cache.add(event.getMessage(), textMessage);
+                }
+            }
+
+            @Override
+            public void onStickerMessageReceived(StickerMessageReceivedEvent event) {
+                logger.info(event.getMessage().asJson().toString());
+                pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = event.getMessage();
+                if (isReplyToBot(tgMessage)) {
+                    String username = b(tgMessage.getSender().getFullName());
+                    String emoji = event.getContent().getContent().getEmoji();
+                    TextMessage textMessage = new TextMessage(null, username + i(" отправил стикер" + emoji));
+                    skChat.sendMessage(textMessage);
+                    cache.add(event.getMessage(), textMessage);
+                }
+            }
+
+            @Override
+            public void onParticipantJoinGroupChat(ParticipantJoinGroupChatEvent event) {
+                logger.info(event.getMessage().asJson().toString());
+
+                TextMessage textMessage = new TextMessage(null, i("В чате Telegram пополнение: " + event.getParticipant().getFullName()));
+                skChat.sendMessage(textMessage);
+                cache.add(event.getMessage(), textMessage);
+            }
+
+            @Override
+            public void onParticipantLeaveGroupChat(ParticipantLeaveGroupChatEvent event) {
+                logger.info(event.getMessage().asJson().toString());
+
+                TextMessage textMessage = new TextMessage(null, i("В чате Telegram убавление: " + event.getParticipant().getFullName()));
+                skChat.sendMessage(textMessage);
+                cache.add(event.getMessage(), textMessage);
             }
         });
 
@@ -167,40 +244,42 @@ public class Skygram {
                 try {
                     logger.info("g '" + group.getTopic() + "' from " + sender.getDisplayName() + ": " + message);
                     if (Objects.equals(group.getId(), skChat.getId())) {
-                        String messageToTg = "";
-                        String senderName = b(sender.getDisplayName());
-                        switch (message.getType()) {
-                            case TEXT:
-                                TextMessage text = (TextMessage) message;
-                                if (text.hasQuotes()) {
-                                    String textToQuote = prepareQuotes(text.getHtml());
-                                    messageToTg = senderName + ":\n" + textToQuote;
-                                    logger.info(messageToTg);
-                                } else {
-                                    messageToTg = senderName + (text.isMe() ? "" : ": ") + sanitize(text.getHtml());
-                                }
-                                break;
-                            case PICTURE:
-                                messageToTg = senderName + i(" запостил картинку. \n") + pre("Вот нет чтобы ссылкой скинуть.");
-                                break;
-                            case FILE:
-                                messageToTg = senderName + i(" запостил файл. \n") + pre("Использует файлообменник на всю катушку.");
-                                break;
-                            case VIDEO:
-                                messageToTg = senderName + i(" прислал видеообращение. \n") + pre("Молодец, но мог бы просто текстом..");
-                                break;
-                            case CONTACT:
-                                messageToTg = senderName + i(" поделился данными контакта. \n") + pre("Молодец.");
-                                break;
-                            case MOJI:
-                                messageToTg = senderName + i(" прислал Можи. Какой мовитон...\n") + pre("Это такие стикеры в скайпе");
-                                break;
-                            case UNKNOWN:
-                                messageToTg = senderName + i(" непонятно что прислал. \n") + pre("Надо подробно разобраться");
-                                break;
+                        if (!store.isMatchWordsEnabled() || isMatch(((AbstractMessage) message).getHtml())) {
+                            String messageToTg = "";
+                            String senderName = b(sender.getDisplayName());
+                            switch (message.getType()) {
+                                case TEXT:
+                                    TextMessage text = (TextMessage) message;
+                                    if (text.hasQuotes()) {
+                                        String textToQuote = prepareQuotes(text.getHtml());
+                                        messageToTg = senderName + ":\n" + textToQuote;
+                                        logger.info(messageToTg);
+                                    } else {
+                                        messageToTg = senderName + (text.isMe() ? "" : ": ") + sanitize(text.getHtml());
+                                    }
+                                    break;
+                                case PICTURE:
+                                    messageToTg = senderName + i(" запостил картинку. \n") + pre("Вот нет чтобы ссылкой скинуть.");
+                                    break;
+                                case FILE:
+                                    messageToTg = senderName + i(" запостил файл. \n") + pre("Использует файлообменник на всю катушку.");
+                                    break;
+                                case VIDEO:
+                                    messageToTg = senderName + i(" прислал видеообращение. \n") + pre("Молодец, но мог бы просто текстом..");
+                                    break;
+                                case CONTACT:
+                                    messageToTg = senderName + i(" поделился данными контакта. \n") + pre("Молодец.");
+                                    break;
+                                case MOJI:
+                                    messageToTg = senderName + i(" прислал Можи. Какой мовитон...\n") + pre("Это такие стикеры в скайпе");
+                                    break;
+                                case UNKNOWN:
+                                    messageToTg = senderName + i(" непонятно что прислал. \n") + pre("Надо подробно разобраться");
+                                    break;
+                            }
+                            pro.zackpollard.telegrambot.api.chat.message.Message mes = tgChat.sendMessage(html(messageToTg));
+                            cache.add(mes, message);
                         }
-                        pro.zackpollard.telegrambot.api.chat.message.Message mes = tgChat.sendMessage(html(messageToTg));
-                        cache.add(mes, message);
                     }
                 } catch (Exception e) {
                     logger.log(Level.SEVERE, "Error: ", e);
@@ -308,6 +387,11 @@ public class Skygram {
 
         bot.startUpdates(false);
         logger.info("Started...");
+    }
+
+    private boolean isReplyToBot(pro.zackpollard.telegrambot.api.chat.message.Message tgMessage) {
+        return tgMessage.getRepliedTo() != null && botUserName.equals(tgMessage.getRepliedTo().getSender().getUsername());
+
     }
 
 }

@@ -3,8 +3,7 @@ package org.formatko.skygram.model;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Arrays;
 
 /**
  * Model of store
@@ -25,6 +24,12 @@ public class Store {
     @Setter
     @Getter
     private String skChatId;
+    @Setter
+    @Getter
+    private String[] matchWords;
+    @Setter
+    @Getter
+    private boolean matchWordsEnabled;
 
     @Override
     public String toString() {
@@ -32,6 +37,8 @@ public class Store {
                 "tgChatId=" + tgChatId +
                 ", skLogin='" + skLogin + '\'' +
                 ", skChatId=" + skChatId +
+                ", matchWordsEnabled=" + matchWordsEnabled +
+                ", matchWords=" + Arrays.toString(matchWords) +
                 '}';
     }
 }
