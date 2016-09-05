@@ -11,11 +11,8 @@ import org.formatko.skygram.util.MessageStack;
 import pro.zackpollard.telegrambot.api.TelegramBot;
 import pro.zackpollard.telegrambot.api.chat.Chat;
 import pro.zackpollard.telegrambot.api.chat.message.send.ParseMode;
-import pro.zackpollard.telegrambot.api.event.chat.ParticipantJoinGroupChatEvent;
-import pro.zackpollard.telegrambot.api.event.chat.ParticipantLeaveGroupChatEvent;
 import pro.zackpollard.telegrambot.api.event.chat.message.*;
 
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.logging.Level;
@@ -23,7 +20,6 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 
 import static org.formatko.skygram.util.TgUtils.*;
-import static org.formatko.skygram.util.TgUtils.arrayToString;
 import static pro.zackpollard.telegrambot.api.chat.ChatType.PRIVATE;
 
 /**
@@ -76,15 +72,6 @@ public class Skygram {
             }
         }
         if (store.getBirthdays() != null) {
-//            "birthdays": {
-//                "dates": {
-//                    "Дататех-Бот": "02-09 18:1-",
-//                            "Дататех-Бот2": "02-09 18:2-"
-//                },
-//                "templates": [
-//                "Коллеги! Давайте поздравим {user} с днем рождения! Пожелаем всех благ! (clap)"
-//    ]
-//            },
             Map<String, String> dates = store.getBirthdays().getDates();
             String[] templates = store.getBirthdays().getTemplates();
             if (!dates.isEmpty() && templates.length > 0) {
@@ -208,34 +195,27 @@ public class Skygram {
                 if (isReplyToBot(tgMessage)) {
                     String username = b(tgMessage.getSender().getFullName());
                     String emoji = event.getContent().getContent().getEmoji();
-                    TextMessage textMessage = new TextMessage(null, username + i(" отправил стикер" + emoji));
+                    TextMessage textMessage = new TextMessage(null, username + i(" отправил стикер " + emoji));
                     skChat.sendMessage(textMessage);
                     cache.add(event.getMessage(), textMessage);
                 }
-            }
-
-            @Override
-            public void onParticipantJoinGroupChat(ParticipantJoinGroupChatEvent event) {
-                logger.info(event.getMessage().asJson().toString());
-
-                TextMessage textMessage = new TextMessage(null, i("В чате Telegram пополнение: " + event.getParticipant().getFullName()));
-                skChat.sendMessage(textMessage);
-                cache.add(event.getMessage(), textMessage);
-            }
-
-            @Override
-            public void onParticipantLeaveGroupChat(ParticipantLeaveGroupChatEvent event) {
-                logger.info(event.getMessage().asJson().toString());
-
-                TextMessage textMessage = new TextMessage(null, i("В чате Telegram убавление: " + event.getParticipant().getFullName()));
-                skChat.sendMessage(textMessage);
-                cache.add(event.getMessage(), textMessage);
             }
         });
 
         skype.connect();
 
-        skype.setErrorListener(e -> logger.log(Level.SEVERE, "Error", e));
+        skype.setErrorListener(e -> {
+            logger.log(Level.SEVERE, "Error", e);
+            logger.log(Level.WARNING, "Trying to reconnect");
+            skype.disconnect();
+            try {
+                skype.connect();
+                logger.log(Level.WARNING, "Skype is reconnected");
+            } catch (Exception e1) {
+                logger.log(Level.SEVERE, "Can't reconnect to Skype", e1);
+            }
+
+        });
 
         skype.addUserMessageListener(new UserMessageListener() {
             Random rand = new Random(System.currentTimeMillis());
@@ -243,22 +223,6 @@ public class Skygram {
             @Override
             public void messageReceived(User sender, Message message) {
                 logger.info("from '" + sender.getDisplayName() + "': " + message);
-                switch (message.getType()) {
-                    case TEXT:
-                        break;
-                    case PICTURE:
-                        break;
-                    case FILE:
-                        break;
-                    case VIDEO:
-                        break;
-                    case CONTACT:
-                        break;
-                    case MOJI:
-                        break;
-                    case UNKNOWN:
-                        break;
-                }
                 sender.sendMessage(Arrays.asList("Прости, но я занят.", "Давай потом", "Так так так...", "Хм..").get(rand.nextInt(4)));
             }
 
@@ -407,32 +371,15 @@ public class Skygram {
             }
 
             @Override
-            public void usersRemoved(Group group, List<User> list) {
-                if (Objects.equals(group.getId(), skChat.getId())) {
-                    List<String> strings = new ArrayList<>();
-                    for (User user : list) {
-                        strings.add(user.getDisplayName());
-                    }
-                    tgChat.sendMessage("Убавление: " + arrayToString(strings.toString(), null));
-                }
+            public void usersRemoved(Group group, List<User> users) {
             }
 
             @Override
-            public void topicChanged(Group group, String s) {
-                if (Objects.equals(group.getId(), skChat.getId())) {
-                    tgChat.sendMessage("Тему чата в скайпе поменяли: " + s);
-                }
+            public void topicChanged(Group group, String topic) {
             }
 
             @Override
-            public void usersRolesChanged(Group group, List<Pair<User, Role>> list) {
-                if (Objects.equals(group.getId(), skChat.getId())) {
-                    List<String> strings = new ArrayList<>();
-                    for (Pair<User, Role> pair : list) {
-                        strings.add(pair.getFirst().getDisplayName() + " теперь " + (pair.getSecond() == Role.ADMIN ? "админ" : "обычный пользователь"));
-                    }
-                    tgChat.sendMessage("Обновили ролей пользователей: " + strings);
-                }
+            public void usersRolesChanged(Group group, List<Pair<User, Role>> newRoles) {
             }
         });
 
@@ -442,7 +389,6 @@ public class Skygram {
 
     private boolean isReplyToBot(pro.zackpollard.telegrambot.api.chat.message.Message tgMessage) {
         return tgMessage.getRepliedTo() != null && botUserName.equals(tgMessage.getRepliedTo().getSender().getUsername());
-
     }
 
 }
