@@ -32,6 +32,7 @@ public class Skygram {
     public static Logger logger = Logger.getLogger(Thread.currentThread().getStackTrace()[1].getClassName());
 
     private static SimpleDateFormat sdf = new SimpleDateFormat("dd-MM HH:mm");
+    private static SimpleDateFormat MM = new SimpleDateFormat("MM");
 
     private String botKey;
     private String botUserName;
@@ -113,6 +114,25 @@ public class Skygram {
         bot.getEventsManager().register(new pro.zackpollard.telegrambot.api.event.Listener() {
             @Override
             public void onCommandMessageReceived(CommandMessageReceivedEvent event) {
+                String command = event.getCommand().toLowerCase();
+                if (command.equals("list")) {
+                    if (store.getBirthdays() != null) {
+                        Map<String, String> dates = store.getBirthdays().getDates();
+                        String birthdays = pre("В этом месяце поздраляем с днем рождения:");
+                        int i = 0;
+                        for (Map.Entry<String, String> entry : dates.entrySet()) {
+                            if (entry.getValue().substring(3, 5).equals(MM.format(new Date()))) {
+                                birthdays += "\n " + entry.getKey() + i(" (" + entry.getValue().substring(0, 5) + ")");
+                                i++;
+                            }
+                        }
+                        if (i == 0) {
+                            birthdays = pre("В этом месяце никто не отмечает день рождения.");
+                        }
+                        tgChat.sendMessage(html(birthdays));
+                    }
+                }
+
                 if (PRIVATE.equals(event.getChat().getType())) {
                     try {
 //                        String command = event.getCommand().toLowerCase();
