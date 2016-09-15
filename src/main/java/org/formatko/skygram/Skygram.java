@@ -85,7 +85,7 @@ public class Skygram {
                         for (Map.Entry<String, String> entry : dates.entrySet()) {
                             String name = entry.getKey();
                             String date = entry.getValue();
-                            if(!alreadyNotified.contains(name)) {
+                            if (!alreadyNotified.contains(name)) {
                                 String now = sdf.format(new Date());
                                 String format = now.substring(0, now.length() - 1) + "-";
                                 if (format.equals(date)) {
@@ -139,33 +139,26 @@ public class Skygram {
 
                 if (PRIVATE.equals(event.getChat().getType())) {
                     try {
-//                        String command = event.getCommand().toLowerCase();
-//                        if (command.equals("login")) {
-//                            String[] args = event.getArgs();
-//                            if (args.length == 2) {
-//                                boolean success;
-//                                ChatLink chatLink = new ChatLink(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId(), args[0], encrypt(args[1]));
-//                                store.addUser(chatLink);
-//                                storeHandler.save(store);
-//                                success = startSkype(chatLink, createSkype(chatLink));
-//                                if (success) {
-//                                    event.getChat().sendMessage("Successfully authorised with skype.");
-//                                    logger.info("New logining: " + args[0]);
-//                                }
-//                            } else {
-//                                event.getChat().sendMessage("Correct usage is: /login [username] [password]");
-//                            }
-//                        }
-//                        if (command.equals("logout")) {
-//                            ChatLink chatLink = new ChatLink(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId());
-//                            store.removeUser(chatLink);
-//                            storeHandler.save(store);
-//                            Skype skype = userSkypeCache.findSkypeMessage(chatLink);
-//                            skype.logout();
-//                            userSkypeCache.remove(chatLink);
-//                            event.getChat().sendMessage("Successfully logout from skype.");
-//                            logger.info("New logouting: " + chatLink.getTgChatId());
-//                        }
+                        if (command.equals("toskype")) {
+                            String[] args = event.getArgs();
+                            if (args.length == 1) {
+                                if (skChat != null) {
+                                    skChat.sendMessage(new TextMessage(null, args[0]));
+                                }
+                            } else {
+                                event.getChat().sendMessage("Correct usage is: /toskype [message]");
+                            }
+                        }
+                        if (command.equals("totg")) {
+                            String[] args = event.getArgs();
+                            if (args.length == 1) {
+                                if (tgChat != null) {
+                                    tgChat.sendMessage(args[0]);
+                                }
+                            } else {
+                                event.getChat().sendMessage("Correct usage is: /totg [message]");
+                            }
+                        }
                     } catch (Exception e) {
                         logger.log(Level.SEVERE, "OnCommand error", e);
                     }
