@@ -140,20 +140,18 @@ public class Skygram {
                 if (PRIVATE.equals(event.getChat().getType())) {
                     try {
                         if (command.equals("toskype")) {
-                            String[] args = event.getArgs();
-                            if (args.length == 1) {
+                            if (event.getArgs().length > 1) {
                                 if (skChat != null) {
-                                    skChat.sendMessage(new TextMessage(null, args[0]));
+                                    skChat.sendMessage(new TextMessage(null, event.getArgsString()));
                                 }
                             } else {
                                 event.getChat().sendMessage("Correct usage is: /toskype [message]");
                             }
                         }
                         if (command.equals("totg")) {
-                            String[] args = event.getArgs();
-                            if (args.length == 1) {
+                            if (event.getArgs().length > 1) {
                                 if (tgChat != null) {
-                                    tgChat.sendMessage(args[0]);
+                                    tgChat.sendMessage(event.getArgsString());
                                 }
                             } else {
                                 event.getChat().sendMessage("Correct usage is: /totg [message]");
