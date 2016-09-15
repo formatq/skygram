@@ -74,6 +74,7 @@ public class Skygram {
         }
         if (store.getBirthdays() != null) {
             Map<String, String> dates = store.getBirthdays().getDates();
+            Set<String> alreadyNotified = new HashSet<>();
             String[] templates = store.getBirthdays().getTemplates();
             if (!dates.isEmpty() && templates.length > 0) {
                 timer.schedule(new TimerTask() {
@@ -84,16 +85,19 @@ public class Skygram {
                         for (Map.Entry<String, String> entry : dates.entrySet()) {
                             String name = entry.getKey();
                             String date = entry.getValue();
-                            String now = sdf.format(new Date());
-                            String format = now.substring(0, now.length() - 1) + "-";
-                            if (format.equals(date)) {
-                                String s = templates[rand.nextInt(templates.length)].replaceAll("\\{user\\}", name);
-                                TextMessage textMessage = new TextMessage(null, s);
-                                if (skChat != null) {
-                                    skChat.sendMessage(textMessage);
-                                }
-                                if (tgChat != null) {
-                                    tgChat.sendMessage(s);
+                            if(!alreadyNotified.contains(name)) {
+                                String now = sdf.format(new Date());
+                                String format = now.substring(0, now.length() - 1) + "-";
+                                if (format.equals(date)) {
+                                    String s = templates[rand.nextInt(templates.length)].replaceAll("\\{user\\}", name);
+                                    TextMessage textMessage = new TextMessage(null, s);
+                                    if (skChat != null) {
+                                        skChat.sendMessage(textMessage);
+                                        alreadyNotified.add(name);
+                                    }
+                                    if (tgChat != null) {
+                                        tgChat.sendMessage(s);
+                                    }
                                 }
                             }
                         }
