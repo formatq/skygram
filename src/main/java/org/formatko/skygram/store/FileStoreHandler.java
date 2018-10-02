@@ -28,14 +28,16 @@ public class FileStoreHandler implements StoreHandler {
     }
 
     public FileStoreHandler(String filePath) {
-        this.filePath = filePath + FILENAME;
+        this.filePath = filePath;
+        logger.info("Path to store=" + this.filePath);
         gson = new GsonBuilder().setPrettyPrinting().create();
     }
 
     @Override
-    public Store load() {
+    public synchronized Store load() {
         file = new File(filePath);
         if (file.exists()) {
+            logger.info("Store file exist");
             return loadFromFile();
         } else {
             try {
@@ -47,12 +49,13 @@ public class FileStoreHandler implements StoreHandler {
             }
             Store store = new Store();
             save(store);
+
             return store;
         }
     }
 
     @Override
-    public Boolean save(Store store) {
+    public synchronized Boolean save(Store store) {
         String json = gson.toJson(store);
 
         FileOutputStream outputStream;
@@ -72,7 +75,9 @@ public class FileStoreHandler implements StoreHandler {
 
     private Store loadFromFile() {
         try (Reader reader = new InputStreamReader(new FileInputStream(file), "UTF-8")) {
-            return gson.fromJson(reader, Store.class);
+            Store store = gson.fromJson(reader, Store.class);
+            logger.info("Store: " + store);
+            return store;
         } catch (IOException e) {
             logger.log(SEVERE, e.getMessage(), e);
         }

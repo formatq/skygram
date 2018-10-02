@@ -1,38 +1,25 @@
 package org.formatko.skygram;
 
-import com.samczsun.skype4j.Skype;
-import com.samczsun.skype4j.SkypeBuilder;
-import com.samczsun.skype4j.events.EventHandler;
-import com.samczsun.skype4j.events.Listener;
-import com.samczsun.skype4j.events.chat.call.CallReceivedEvent;
-import com.samczsun.skype4j.events.chat.message.MessageReceivedEvent;
-import com.samczsun.skype4j.events.chat.user.*;
-import com.samczsun.skype4j.exceptions.ConnectionException;
-import com.samczsun.skype4j.exceptions.InvalidCredentialsException;
-import com.samczsun.skype4j.exceptions.handler.ErrorHandler;
-import com.samczsun.skype4j.exceptions.handler.ErrorSource;
-import com.samczsun.skype4j.formatting.Text;
+import fr.delthas.skype.*;
+import fr.delthas.skype.message.AbstractMessage;
+import fr.delthas.skype.message.Message;
+import fr.delthas.skype.message.TextMessage;
 import org.formatko.skygram.model.Store;
-import org.formatko.skygram.model.User;
 import org.formatko.skygram.store.FileStoreHandler;
-import org.formatko.skygram.store.MessageCache;
 import org.formatko.skygram.store.StoreHandler;
-import org.formatko.skygram.util.SkypeUtils;
+import org.formatko.skygram.util.MessageStack;
 import pro.zackpollard.telegrambot.api.TelegramBot;
 import pro.zackpollard.telegrambot.api.chat.Chat;
-import pro.zackpollard.telegrambot.api.chat.message.Message;
-import pro.zackpollard.telegrambot.api.event.chat.message.CommandMessageReceivedEvent;
+import pro.zackpollard.telegrambot.api.chat.message.send.ParseMode;
+import pro.zackpollard.telegrambot.api.event.chat.message.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
-import static org.formatko.skygram.Main.SKYGRAM_PATH;
-import static org.formatko.skygram.model.Cypher.decrypt;
-import static org.formatko.skygram.model.Cypher.encrypt;
-import static org.formatko.skygram.util.SkypeUtils.getStringUsers;
-import static org.formatko.skygram.util.TgUtils.markdown;
+import static org.formatko.skygram.util.TgUtils.*;
 import static pro.zackpollard.telegrambot.api.chat.ChatType.PRIVATE;
 
 /**
@@ -44,59 +31,131 @@ public class Skygram {
 
     public static Logger logger = Logger.getLogger(Thread.currentThread().getStackTrace()[1].getClassName());
 
-    private TelegramBot bot;
-    private Store store;
+    private static SimpleDateFormat sdf = new SimpleDateFormat("dd-MM HH:mm");
+    private static SimpleDateFormat MM = new SimpleDateFormat("MM");
+
     private String botKey;
+    private String botUserName;
     private StoreHandler storeHandler;
 
-    private MessageCache messageCache = new MessageCache();
+    private Group skChat;
+    private Chat tgChat;
 
-    private Map<User, Skype> userSkypeCache = new HashMap<>();
+    private Pattern pattern;
 
-    public Skygram(String botKey) {
+    MessageStack cache = new MessageStack();
+    Timer timer = new Timer("birthdaysTimer", false);
+
+    public Skygram(String botKey, String storePath) {
         this.botKey = botKey;
-        this.storeHandler = new FileStoreHandler(SKYGRAM_PATH);
+        this.storeHandler = new FileStoreHandler(storePath);
     }
 
-    public void start() {
-        logger.info("Starting...");
-        store = storeHandler.load();
+    public Boolean isMatch(String html) {
+        return pattern != null && pattern.matcher(html.toLowerCase()).matches();
+    }
 
-        bot = TelegramBot.login(botKey);
+    public void start() throws Exception {
+        logger.info("Starting...");
+        Store store = storeHandler.load();
+
+        if (store.isMatchWordsEnabled()) {
+            String patterString = "";
+            String[] words = store.getMatchWords();
+            for (int i = 0; i < words.length; i++) {
+                patterString += ".*" + words[i].toLowerCase() + ".*";
+                if (i != words.length - 1) {
+                    patterString += "|";
+                }
+            }
+            if (!patterString.isEmpty()) {
+                pattern = Pattern.compile(patterString, Pattern.DOTALL);
+            }
+        }
+        if (store.getBirthdays() != null) {
+            Map<String, String> dates = store.getBirthdays().getDates();
+            Set<String> alreadyNotified = new HashSet<>();
+            String[] templates = store.getBirthdays().getTemplates();
+            if (!dates.isEmpty() && templates.length > 0) {
+                timer.schedule(new TimerTask() {
+                    Random rand = new Random(System.currentTimeMillis());
+
+                    @Override
+                    public void run() {
+                        for (Map.Entry<String, String> entry : dates.entrySet()) {
+                            String name = entry.getKey();
+                            String date = entry.getValue();
+                            if (!alreadyNotified.contains(name)) {
+                                String now = sdf.format(new Date());
+                                String format = now.substring(0, now.length() - 1) + "-";
+                                if (format.equals(date)) {
+                                    String s = templates[rand.nextInt(templates.length)].replaceAll("\\{user\\}", name);
+                                    TextMessage textMessage = new TextMessage(null, s);
+                                    if (skChat != null) {
+                                        skChat.sendMessage(textMessage);
+                                        alreadyNotified.add(name);
+                                    }
+                                    if (tgChat != null) {
+                                        tgChat.sendMessage(s);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }, 3000, 3000);
+            }
+        }
+
+        TelegramBot bot = TelegramBot.login(botKey);
+        botUserName = "@" + bot.getBotUsername();
+
+        Skype skype = new Skype(store.getSkLogin(), store.getSkPassword());
+
         if (bot == null) {
             throw new RuntimeException("Can't create Telegram bot. Check key of bot.");
         }
+
         bot.getEventsManager().register(new pro.zackpollard.telegrambot.api.event.Listener() {
             @Override
             public void onCommandMessageReceived(CommandMessageReceivedEvent event) {
-                if (PRIVATE.equals(event.getChat().getType())) {
-                    try {
-                        String command = event.getCommand().toLowerCase();
-                        if (command.equals("login")) {
-                            String[] args = event.getArgs();
-                            if (args.length == 2) {
-                                boolean success;
-                                User user = new User(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId(), args[0], encrypt(args[1]));
-                                store.addUser(user);
-                                storeHandler.save(store);
-                                success = startSkype(user, createSkype(user));
-                                if (success) {
-                                    event.getChat().sendMessage("Successfully authorised with skype.");
-                                    logger.info("New logining: " + args[0]);
-                                }
-                            } else {
-                                event.getChat().sendMessage("Correct usage is: /login [username] [password]");
+                String command = event.getCommand().toLowerCase();
+                if (command.equals("list")) {
+                    if (store.getBirthdays() != null) {
+                        Map<String, String> dates = store.getBirthdays().getDates();
+                        String birthdays = pre("В этом месяце поздраляем с днем рождения:");
+                        int i = 0;
+                        for (Map.Entry<String, String> entry : dates.entrySet()) {
+                            if (entry.getValue().substring(3, 5).equals(MM.format(new Date()))) {
+                                birthdays += "\n " + entry.getKey() + i(" (" + entry.getValue().substring(0, 5) + ")");
+                                i++;
                             }
                         }
-                        if (command.equals("logout")) {
-                            User user = new User(((pro.zackpollard.telegrambot.api.chat.IndividualChat) event.getChat()).getPartner().getId());
-                            store.removeUser(user);
-                            storeHandler.save(store);
-                            Skype skype = userSkypeCache.get(user);
-                            skype.logout();
-                            userSkypeCache.remove(user);
-                            event.getChat().sendMessage("Successfully logout from skype.");
-                            logger.info("New logouting: " + user.getTgUserId());
+                        if (i == 0) {
+                            birthdays = pre("В этом месяце никто не отмечает день рождения.");
+                        }
+                        tgChat.sendMessage(html(birthdays));
+                    }
+                }
+
+                if (PRIVATE.equals(event.getChat().getType())) {
+                    try {
+                        if (command.equals("toskype")) {
+                            if (event.getArgs().length > 1) {
+                                if (skChat != null) {
+                                    skChat.sendMessage(new TextMessage(null, event.getArgsString()));
+                                }
+                            } else {
+                                event.getChat().sendMessage("Correct usage is: /toskype [message]");
+                            }
+                        }
+                        if (command.equals("totg")) {
+                            if (event.getArgs().length > 1) {
+                                if (tgChat != null) {
+                                    tgChat.sendMessage(event.getArgsString());
+                                }
+                            } else {
+                                event.getChat().sendMessage("Correct usage is: /totg [message]");
+                            }
                         }
                     } catch (Exception e) {
                         logger.log(Level.SEVERE, "OnCommand error", e);
@@ -106,148 +165,245 @@ public class Skygram {
 
             @Override
             public void onTextMessageReceived(pro.zackpollard.telegrambot.api.event.chat.message.TextMessageReceivedEvent event) {
-                if (PRIVATE.equals(event.getChat().getType())) {
-                    Message repliedTo = event.getMessage().getRepliedTo();
-                    if (repliedTo != null) {
-                        com.samczsun.skype4j.chat.Chat chat = messageCache.getChat(repliedTo);
-                        if (chat != null) {
-                            try {
-                                chat.sendMessage(com.samczsun.skype4j.formatting.Message.create().with(Text.plain(event.getContent().getContent())));
-                            } catch (ConnectionException e) {
-                                logger.log(Level.SEVERE, "Can't send message in chat " + chat.getIdentity(), e);
-                            }
-                        } else {
-                            logger.warning("Can't find chat for " + repliedTo.toString());
+                if (event.getChat().getId().equals(tgChat.getId())) {
+                    String content = event.getContent().getContent();
+                    pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = event.getMessage();
+                    if (isReplyToBot(tgMessage) || content.startsWith(botUserName)) {
+                        if (content.startsWith(botUserName)) {
+                            content = content.replace(botUserName, "");
                         }
+                        String username = b(tgMessage.getSender().getFullName());
+                        TextMessage textMessage = new TextMessage(null, username + ": " + content);
+                        skChat.sendMessage(textMessage);
+                        cache.add(event.getMessage(), textMessage);
                     }
-                    //logger.log(Level.INFO, messageCache.toString());
+                }
+            }
+
+            @Override
+            public void onMessageReceived(MessageReceivedEvent event) {
+                logger.info(event.getMessage().asJson().toString());
+            }
+
+            @Override
+            public void onMessageEditReceived(MessageEditReceivedEvent event) {
+                logger.info(event.getMessage().asJson().toString());
+            }
+
+            @Override
+            public void onPhotoMessageReceived(PhotoMessageReceivedEvent event) {
+                logger.info(event.getMessage().asJson().toString());
+                pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = event.getMessage();
+                if (isReplyToBot(tgMessage)) {
+                    String username = b(tgMessage.getSender().getFullName());
+                    String caption = event.getContent().getCaption();
+                    TextMessage textMessage = new TextMessage(null, username + i(" отправил фотку") + (caption != null ? (" c подписью '" + caption + "'") : ""));
+                    skChat.sendMessage(textMessage);
+                    cache.add(event.getMessage(), textMessage);
+                }
+            }
+
+            @Override
+            public void onStickerMessageReceived(StickerMessageReceivedEvent event) {
+                logger.info(event.getMessage().asJson().toString());
+                pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = event.getMessage();
+                if (isReplyToBot(tgMessage)) {
+                    String username = b(tgMessage.getSender().getFullName());
+                    String emoji = event.getContent().getContent().getEmoji();
+                    TextMessage textMessage = new TextMessage(null, username + i(" отправил стикер " + emoji));
+                    skChat.sendMessage(textMessage);
+                    cache.add(event.getMessage(), textMessage);
                 }
             }
         });
 
-        for (User user : store.getUsers()) {
-            userSkypeCache.put(user, createSkype(user));
-        }
+        skype.connect();
 
-        for (Map.Entry<User, Skype> pair : userSkypeCache.entrySet()) {
-            startSkype(pair.getKey(), pair.getValue());
+        skype.setErrorListener(e -> {
+            logger.log(Level.SEVERE, "Error", e);
+            logger.log(Level.WARNING, "Trying to reconnect");
+            skype.disconnect();
+            try {
+                skype.connect();
+                logger.log(Level.WARNING, "Skype is reconnected");
+            } catch (Exception e1) {
+                logger.log(Level.SEVERE, "Can't reconnect to Skype", e1);
+            }
+
+        });
+
+        skype.addUserMessageListener(new UserMessageListener() {
+            Random rand = new Random(System.currentTimeMillis());
+
+            @Override
+            public void messageReceived(User sender, Message message) {
+                logger.info("from '" + sender.getDisplayName() + "': " + message);
+                sender.sendMessage(Arrays.asList("Прости, но я занят.", "Давай потом", "Так так так...", "Хм..").get(rand.nextInt(4)));
+            }
+
+            @Override
+            public void messageEdited(User sender, Message message) {
+                logger.info("from '" + sender.getDisplayName() + "': " + message);
+            }
+
+            @Override
+            public void messageRemoved(User sender, Message message) {
+                logger.info("from '" + sender.getDisplayName() + "': " + message);
+                sender.sendMessage("Чоит ты там удаляешь? :)");
+            }
+        });
+
+        for (Group group : skype.getGroups()) {
+            if (group.getId().equals(store.getSkChatId())) {
+                this.skChat = group;
+            }
         }
+        tgChat = bot.getChat(store.getTgChatId());
+
+        skype.addGroupMessageListener(new GroupMessageListener() {
+            @Override
+            public void messageReceived(Group group, User sender, Message message) {
+                try {
+                    logger.info("g '" + group.getTopic() + "' from " + sender.getDisplayName() + ": " + message);
+                    if (Objects.equals(group.getId(), skChat.getId())) {
+                        if (!store.isMatchWordsEnabled() || isMatch(((AbstractMessage) message).getHtml())) {
+                            String messageToTg = "";
+                            String senderName = b(sender.getDisplayName());
+                            switch (message.getType()) {
+                                case TEXT:
+                                    TextMessage text = (TextMessage) message;
+                                    if (text.hasQuotes()) {
+                                        String textToQuote = prepareQuotes(text.getHtml());
+                                        messageToTg = senderName + ":\n" + textToQuote;
+                                        logger.info(messageToTg);
+                                    } else {
+                                        messageToTg = senderName + (text.isMe() ? "" : ": ") + sanitize(text.getHtml());
+                                    }
+                                    break;
+                                case PICTURE:
+                                    messageToTg = senderName + i(" запостил картинку. \n") + pre("Вот нет чтобы ссылкой скинуть.");
+                                    break;
+                                case FILE:
+                                    messageToTg = senderName + i(" запостил файл. \n") + pre("Использует файлообменник на всю катушку.");
+                                    break;
+                                case VIDEO:
+                                    messageToTg = senderName + i(" прислал видеообращение. \n") + pre("Молодец, но мог бы просто текстом..");
+                                    break;
+                                case CONTACT:
+                                    messageToTg = senderName + i(" поделился данными контакта. \n") + pre("Молодец.");
+                                    break;
+                                case MOJI:
+                                    messageToTg = senderName + i(" прислал Можи. Какой мовитон...\n") + pre("Это такие стикеры в скайпе");
+                                    break;
+                                case UNKNOWN:
+                                    messageToTg = senderName + i(" непонятно что прислал. \n") + pre("Надо подробно разобраться");
+                                    break;
+                            }
+                            pro.zackpollard.telegrambot.api.chat.message.Message mes = tgChat.sendMessage(html(messageToTg));
+                            cache.add(mes, message);
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Error: ", e);
+                }
+            }
+
+            @Override
+            public void messageEdited(Group group, User sender, Message message) {
+                try {
+                    logger.info("g '" + group.getTopic() + "' from " + sender.getDisplayName() + ": " + message);
+                    if (Objects.equals(group.getId(), skChat.getId())) {
+                        pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = cache.findTgMessage(message);
+                        if (tgMessage != null) {
+                            String messageToTg = "";
+                            String senderName = b(sender.getDisplayName());
+                            switch (message.getType()) {
+                                case TEXT:
+                                    TextMessage text = (TextMessage) message;
+                                    if (text.hasQuotes()) {
+                                        String textToQuote = prepareQuotes(text.getHtml());
+                                        messageToTg = senderName + ":\n" + textToQuote;
+                                        logger.info(messageToTg);
+                                    } else {
+                                        messageToTg = senderName + (text.isMe() ? "" : ": ") + sanitize(text.getHtml());
+                                    }
+                                    pro.zackpollard.telegrambot.api.chat.message.Message editMessage = tgChat.getBotInstance().editMessageText(tgChat.getId(), tgMessage.getMessageId(), messageToTg, ParseMode.HTML, false, null);
+                                    cache.add(editMessage, message);
+                                    break;
+                                case PICTURE:
+                                case FILE:
+                                case VIDEO:
+                                case CONTACT:
+                                case MOJI:
+                                case UNKNOWN:
+                                    break;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Error: ", e);
+                }
+            }
+
+            @Override
+            public void messageRemoved(Group group, User sender, Message message) {
+                try {
+                    logger.info("g '" + group.getTopic() + "' from " + sender.getDisplayName() + ": " + message);
+                    if (Objects.equals(group.getId(), skChat.getId())) {
+                        pro.zackpollard.telegrambot.api.chat.message.Message tgMessage = cache.findTgMessage(message);
+                        if (tgMessage != null) {
+                            String messageToTg = b(sender.getDisplayName());
+                            messageToTg = messageToTg + i(" удалил сообщение");
+                            tgChat.getBotInstance().editMessageText(tgChat.getId(), tgMessage.getMessageId(), messageToTg, ParseMode.HTML, false, null);
+                            cache.remove(tgMessage);
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.log(Level.SEVERE, "Error: ", e);
+                }
+            }
+        });
+
+
+        skype.addGroupPropertiesListener(new GroupPropertiesListener() {
+            @Override
+            public void usersAdded(Group group, List<User> list) {
+                if (Objects.equals(group.getId(), skChat.getId())) {
+                    List<String> nameStrings = new ArrayList<>();
+                    for (User user : list) {
+                        nameStrings.add(user.getDisplayName());
+                    }
+                    String names = arrayToString(nameStrings.toString(), null);
+
+                    tgChat.sendMessage("Пополнение: " + names);
+                    String greetings = store.getGreetings();
+                    if (greetings != null && !greetings.isEmpty()) {
+                        String words = arrayToString(Arrays.toString(store.getMatchWords()), " ");
+                        String s = greetings.replace("{newMembers}", names).replace("{filters}", (pattern != null ? words : "Например пицц"));
+                        skChat.sendMessage(new TextMessage(null, s));
+                    }
+                }
+            }
+
+            @Override
+            public void usersRemoved(Group group, List<User> users) {
+            }
+
+            @Override
+            public void topicChanged(Group group, String topic) {
+            }
+
+            @Override
+            public void usersRolesChanged(Group group, List<Pair<User, Role>> newRoles) {
+            }
+        });
 
         bot.startUpdates(false);
         logger.info("Started...");
     }
 
-    private Skype createSkype(User user) {
-        return new SkypeBuilder(user.getSkLogin(), decrypt(user.getSkPassword())).withLogger(logger).withAllResources().withExceptionHandler(new ErrorHandler() {
-            @Override
-            public void handle(ErrorSource errorSource, Throwable error, boolean shutdown) {
-                logger.log(Level.SEVERE, "Error on skype. ErrorSource: " + errorSource + ", shutdown: " + shutdown, error);
-            }
-        }).build();
+    private boolean isReplyToBot(pro.zackpollard.telegrambot.api.chat.message.Message tgMessage) {
+        return tgMessage.getRepliedTo() != null && botUserName.equals(tgMessage.getRepliedTo().getSender().getUsername());
     }
 
-    private boolean startSkype(User user, Skype skype) {
-        try {
-            skype.login();
-            skype.getEventDispatcher().registerListener(new Listener() {
-                Chat tgChat = null;
-
-                private Chat getTgChat() {
-                    if (tgChat == null) {
-                        tgChat = bot.getChat(user.getTgUserId());
-                    }
-                    return tgChat;
-                }
-
-                @EventHandler
-                public void onMessageReceived(MessageReceivedEvent e) throws ConnectionException {
-                    String chatName = SkypeUtils.getChatName(e);
-                    logger.info("new message in " + chatName);
-                    boolean isGroup = SkypeUtils.isGroup(e);
-                    String senderName = e.getMessage().getSender().getDisplayName();
-                    String textMessage = e.getMessage().getContent().asPlaintext();
-                    Message message = bot.sendMessage(getTgChat(),
-                            markdown((isGroup ? "`" + chatName + "`\n" : "") +
-                                    "*" + senderName + "*: " +
-                                    textMessage));
-                    messageCache.addMessage(e.getChat(), message);
-                }
-
-                @EventHandler
-                public void onCallReceived(CallReceivedEvent e) throws ConnectionException {
-                    String chatName = SkypeUtils.getChatName(e);
-                    boolean isGroup = SkypeUtils.isGroup(e);
-                    String senderName = e.getSender().getDisplayName();
-                    Message message = bot.sendMessage(getTgChat(),
-                            markdown((isGroup ? "`" + chatName + "`\n" : "") +
-                                    "*" + senderName + "* " + (e.isCallStarted() ? "start calling." : "stop calling."))
-                    );
-                    messageCache.addMessage(e.getChat(), message);
-                }
-
-                @EventHandler
-                public void onUserAdd(UserAddEvent e) throws ConnectionException {
-                    addOrRemoveUser(e);
-                }
-
-                @EventHandler
-                public void onUserRemove(UserRemoveEvent e) throws ConnectionException {
-                    addOrRemoveUser(e);
-                }
-
-                @EventHandler
-                public void onLegacyMemberAdded(LegacyMemberAddedEvent e) throws ConnectionException {
-                    logger.log(Level.WARNING, e.getUser().getDisplayName());
-                    //addOrRemoveUser(e);
-                }
-
-                @EventHandler
-                public void onMultiUserAdd(MultiUserAddEvent e) throws ConnectionException {
-                    logger.log(Level.WARNING, e.getAllUsers().toString());
-                    //addOrRemoveUser(e);
-                }
-
-                private void addOrRemoveUser(UserEvent e) throws ConnectionException {
-                    logger.log(Level.INFO, "Started user event " + e.getClass());
-                    Boolean isAdd = null;
-                    String initiator = "Unknown username";
-                    String subjectName = "Some user(s)";
-                    if (e instanceof UserAddEvent) {
-                        initiator = ((UserAddEvent) e).getInitiator().getDisplayName();
-                        isAdd = true;
-                        subjectName = e.getUser().getDisplayName();
-                    }
-                    if (e instanceof MultiUserAddEvent) {
-                        initiator = ((MultiUserAddEvent) e).getInitiator().getDisplayName();
-                        isAdd = true;
-                        subjectName = getStringUsers(((MultiUserAddEvent) e).getAllUsers(), null);
-                    }
-                    if (e instanceof UserRemoveEvent) {
-                        initiator = ((UserRemoveEvent) e).getInitiator().getDisplayName();
-                        isAdd = false;
-                        subjectName = e.getUser().getDisplayName();
-                    }
-                    if (isAdd != null) {
-                        String chatName = SkypeUtils.getChatName(e);
-                        boolean isGroup = SkypeUtils.isGroup(e);
-
-                        Message message = bot.sendMessage(getTgChat(),
-                                markdown((isGroup ? "`" + chatName + "`\n" : "") +
-                                        "*" + initiator + "* " + (isAdd ? "added" : "removed") + " *" + subjectName + "*"));
-                        messageCache.addMessage(e.getChat(), message);
-                    } else {
-                        logger.log(Level.WARNING, "Have not success to handle user add or remove event. Event type is " + e.getClass());
-                    }
-                }
-            });
-            skype.subscribe();
-            logger.info("Connected to skype: " + user.getSkLogin());
-            return true;
-        } catch (InvalidCredentialsException e) {
-            logger.log(Level.SEVERE, "Can't log in with " + user, e);
-        } catch (Exception e) {
-            logger.log(Level.SEVERE, "Can't start skype with " + user, e);
-        }
-        return false;
-    }
 }

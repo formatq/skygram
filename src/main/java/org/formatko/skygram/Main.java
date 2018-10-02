@@ -16,19 +16,19 @@ import static java.io.File.separator;
  */
 public class Main {
 
-    public static String SKYGRAM_PATH = System.getProperty("user.home") + separator + "AppData" + separator + "Roaming" + separator + "Skygram" + separator;
-
     private static Logger logger = Logger.getLogger(Thread.currentThread().getStackTrace()[1].getClassName());
 
     private static int attempt = 5;
     private static String botKey;
+    private static String storePath;
 
     public static void main(String[] args) {
         try {
-            File homeDir = new File(SKYGRAM_PATH);
-            if (!homeDir.exists()) {
-                homeDir.mkdirs();
+            if (args.length < 2) {
+                System.out.println("Must be 2 args - botApiKey and path to the store.");
+                System.exit(1);
             }
+
             LogManager.getLogManager().readConfiguration(ClassLoader.getSystemResourceAsStream("logging.properties"));
             worker(args);
         } catch (IOException e) {
@@ -41,10 +41,14 @@ public class Main {
             botKey = args[0];
         }
 
+        if (storePath == null) {
+            storePath = args[1];
+        }
+
         if (botKey != null && !botKey.isEmpty()) {
             Skygram skygram;
             try {
-                skygram = new Skygram(botKey);
+                skygram = new Skygram(botKey, storePath);
                 skygram.start();
             } catch (Exception e) {
                 attempt--;
@@ -52,7 +56,7 @@ public class Main {
                 if (attempt >= 0) {
                     logger.log(Level.INFO, "Restarting...");
                     try {
-                        Thread.sleep(1000);
+                        Thread.sleep(10000);
                     } catch (InterruptedException ignored) {
                     }
                     worker(args);
